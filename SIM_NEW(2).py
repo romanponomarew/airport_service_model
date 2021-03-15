@@ -7,7 +7,6 @@ import random
 import json
 import sys
 
-import time
 
 AIRPLANE_ARRIVING_TIME = [3000, 7000]  # Прибытие самолета каждые [min, max] секунд
 # Define constants for the screen width and height
