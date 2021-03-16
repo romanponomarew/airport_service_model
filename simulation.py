@@ -173,7 +173,7 @@ class Airplane:
         """
         global stoyanka_counts
         for station_object in stations_objects:
-            if self.status == "on_parking" and station_object.station_status == 0 and station_object.stoyanka_to_station == 0:
+            if self.status == "on_parking" and not station_object.station_status and not station_object.stoyanka_to_station:
                 if "to_station" not in self.status_now:
                     self.status_now = "to_station" + str(station_object.number_of_station)
                     station_object.stoyanka_to_station = 1
@@ -223,7 +223,8 @@ class Airplane:
                 json.dump(results, fw)
             raise SystemExit
 
-    def stopping_simulation_by_time(self):
+    @staticmethod
+    def stopping_simulation_by_time():
         """
         Остановить симуляцию по истечению отведенного времени
         """
@@ -282,7 +283,7 @@ class Loader:
         self.status = "in_warehouse"  # "on_service_station", "moving"
         self.repair_time = random.randint(1200, 2000)  # Среднее время ремонта на станции тех.обслуживания
 
-        # self.search_time = random.randint(150, 300)   # Среднее время поиска 1 детали на складе(стандартные технологии)
+        # self.search_time = random.randint(150, 300)  # Среднее время поиска 1 детали на складе(стандартные технологии)
         self.search_time = random.randint(33, 67)  # Среднее время поиска 1 детали на складе(технологии IoT)
 
         self.search_status = "search"
@@ -318,7 +319,7 @@ class Loader:
                 requesting_station.repairing = "now"
                 self.requesting_station = 0
 
-        yield self.env.timeout(10)  ###### Для того чтобы можно было вызвать как генератор
+        yield self.env.timeout(10)  # Для того чтобы можно было вызвать как генератор
 
     def to_warehouse(self):
         """Перемещение грузчиков от станции тех.обслуживания к складу"""
@@ -365,15 +366,16 @@ class Loader:
             self.status_now = "to_station" + str(station_object.number_of_station)
         if warehouse_loaders != 0:
             warehouse_loaders -= 1
-        if station_object.loader_to_station and self.status_now == f"to_station{station_number}" and WAREHOSE_STATION_SIZE2 > station_object.details_required:
-            self.take_details_from_warehouse(details_required=station_object.details_required)
-            if self.loader_details != 0:
-                if self.search_status == "search":
-                    yield self.env.timeout(
-                        self.search_time * station_object.details_required)  # Время поиска запчастей для ст.тех.обсл. на складе
-                    self.search_status = "done"
-                if self.search_status == "done":
-                    yield env.process(self.go_to_requesting_details_station(requesting_station=station_object))
+        if station_object.loader_to_station and self.status_now == f"to_station{station_number}":
+            if WAREHOSE_STATION_SIZE2 > station_object.details_required:
+                self.take_details_from_warehouse(details_required=station_object.details_required)
+                if self.loader_details != 0:
+                    if self.search_status == "search":
+                        yield self.env.timeout(
+                            self.search_time * station_object.details_required)  # Время поиска запчастей на складе
+                        self.search_status = "done"
+                    if self.search_status == "done":
+                        yield env.process(self.go_to_requesting_details_station(requesting_station=station_object))
 
     def take_details_from_warehouse(self, details_required):
         """
@@ -386,7 +388,8 @@ class Loader:
             self.loader_details = details_required
             self.warehose_status = "full"
 
-    def ordering_new_details(self):
+    @staticmethod
+    def ordering_new_details():
         """
         Грузчики ищут на складе нужные для ремонта детали.
         Если деталей недостаточно, они сообщают грузовику отправится на производство за новыми запчастями
@@ -461,6 +464,7 @@ class Truck:
         При количестве деталей на складе меньше допустимого предела - перемещается на производство,
         загружает детали и везет обратно на склад
     """
+
     def __init__(self, env):
         self.IMG_size = 70
         self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
