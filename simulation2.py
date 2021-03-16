@@ -398,21 +398,40 @@ class Loader:
                 warehouse_loaders += 1
                 self.warehose_status = "empty"
 
-    # def departure_from_warehouse_to_station(self, requesting_station):
-    #     global warehouse_loaders
-    #     if requesting_station.loader_to_station == 0:
-    #         if "to_station" not in self.status_now:
-    #             self.status_now = "to_station" + str(requesting_station.number_of_station)
-    #             requesting_station.loader_to_station = 1
-    #         if warehouse_loaders != 0:
-    #             warehouse_loaders -= 1
+    def checking_stations(self):
+        """
+        Проверка станций - выбор станции, к которой нужно перенсти детали со склада
+        """
+        for station_object in stations_objects:
+            if self.status == "in_warehouse" and not station_object.loaders_count_on_station:
+                if station_object.station_status and not station_object.loader_to_station:
+                    station_object.loader_to_station = 1
+                    return station_object
 
-    def departure_from_warehouse_to_station(self, requesting_station):
+    def departure_from_warehouse_to_station(self, WAREHOSE_STATION_SIZE2, station_object):
+        """
+        Если грузчиком получен запрос станции о ремонте, он проверяет:
+         1.находится ли кто-то из грузчиков уже в пути
+         2.есть ли на складе нужные запчасти
+        Забирает детали со склада и отправляется к нужной станции
+        """
         global warehouse_loaders
+        station_number = station_object.number_of_station
+        # self.departure_from_warehouse_to_station(requesting_station=station_object)
         if "to_station" not in self.status_now:
-            self.status_now = "to_station" + str(requesting_station.number_of_station)
+            self.status_now = "to_station" + str(station_object.number_of_station)
         if warehouse_loaders != 0:
             warehouse_loaders -= 1
+        if station_object.loader_to_station and self.status_now == f"to_station{station_number}" and WAREHOSE_STATION_SIZE2 > station_object.details_required:
+            self.take_details_from_warehouse(details_required=station_object.details_required)
+
+            if self.loader_details != 0:
+                if self.search_status == "search":
+                    yield self.env.timeout(
+                        self.search_time * station_object.details_required)  # Время поиска запчастей для ст.тех.обсл.1 на складе
+                    self.search_status = "done"
+                if self.search_status == "done":
+                    yield env.process(self.go_to_requesting_details_station(requesting_station=station_object))
 
     def take_details_from_warehouse(self, details_required):
         """
@@ -425,53 +444,26 @@ class Loader:
             self.loader_details = details_required
             self.warehose_status = "full"
 
-    def checking_stations(self):
+    def ordering_new_details(self):
         """
-        Проверка станций - выбор станции, к которой нужно перенсти детали со склада
+        Грузчики ищут на складе нужные для ремонта детали.
+        Если деталей недостаточно, они сообщают грузовику отправится на производство за новыми запчастями
         """
-        for station_object in stations_objects:
-            if self.status == "in_warehouse" and not station_object.loaders_count_on_station:
-                if station_object.station_status and not station_object.loader_to_station:
-                    station_object.loader_to_station = 1
-                    return station_object
-
-    def run(self):
-        global warehouse_loaders
         global WAREHOSE_STATION_SIZE2
-
-        while True:
-            # Станция обслуживания выбирается только один раз для каждого из самолетов
-            if self.requesting_station:
-                print(f"Грузчик №{self.number}, его requesting_station={self.requesting_station.number_of_station}")
-            else:
-                print(f"Грузчик №{self.number}, его requesting_station={self.requesting_station}")
-            if not self.requesting_station:
-                self.requesting_station = self.checking_stations()  # Выбор свободной станции обслуживания
-            station_object = self.requesting_station
-
-            # При выборе грузчиком нуждающейся станции, достаточном количестве деталей на складе, он отправляется на станцию обслуживания
-            if station_object:
-                station_number = station_object.number_of_station
-                self.departure_from_warehouse_to_station(requesting_station=station_object)
-
-                if station_object.loader_to_station and self.status_now == f"to_station{station_number}" and WAREHOSE_STATION_SIZE2 > station_object.details_required:
-                    self.take_details_from_warehouse(details_required=station_object.details_required)
-
-                    if self.loader_details != 0:
-                        if self.search_status == "search":
-                            yield self.env.timeout(
-                                self.search_time * station_object.details_required)  # Время поиска запчастей для ст.тех.обсл.1 на складе
-                            self.search_status = "done"
-                        if self.search_status == "done":
-                            yield env.process(self.go_to_requesting_details_station(requesting_station=station_object))
-
-            # Говорим грузовику отпраится на склад за новыми запчастями:
-            for station_object in stations_objects:
-                yield from self.ordering_new_details(station_object)
-
-            # Отправление грузчика при завершении ремонта со станции обратно на склад:
-            yield from self.return_to_warehouse()
-            yield self.env.timeout(50)
+        for station_object in stations_objects:
+            if WAREHOSE_STATION_SIZE2 < station_object.details_required:
+                # Ждем грузовик с новыми запчастями и пополняем запас склада
+                if truck.status == "in_warehouse":
+                    yield env.process(truck.to_production())
+                # Грузовик находится на производстве:
+                if truck.status == "on_production":
+                    if truck.loading_status == "now":
+                        yield env.process(truck.loading())
+                        truck.loading_status = "done"
+                    if truck.loading_status == "done":
+                        yield env.process(truck.to_warehouse())
+                        if truck.y == 240 and truck.x == 600:
+                            WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX
 
     def return_to_warehouse(self):
         """
@@ -493,25 +485,27 @@ class Loader:
                     station_object.loaders_count_on_station = 0
             self.to_warehouse()
 
-    def ordering_new_details(self, station_object):
-        """
-        Грузчики ищут на складе нужные для ремонта детали.
-        Если деталей недостаточно, они сообщают грузовику отправится на производство за новыми запчастями
-        """
-        global WAREHOSE_STATION_SIZE2
-        if WAREHOSE_STATION_SIZE2 < station_object.details_required:
-            # Ждем грузовик с новыми запчастями и пополняем запас склада
-            if truck.status == "in_warehouse":
-                yield env.process(truck.to_production())
-            # Грузовик находится на производстве:
-            if truck.status == "on_production":
-                if truck.loading_status == "now":
-                    yield env.process(truck.loading())
-                    truck.loading_status = "done"
-                if truck.loading_status == "done":
-                    yield env.process(truck.to_warehouse())
-                    if truck.y == 240 and truck.x == 600:
-                        WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX
+    def run(self):
+        while True:
+            # Станция обслуживания выбирается только один раз для каждого из самолетов
+            if self.requesting_station:
+                print(f"Грузчик №{self.number}, его requesting_station={self.requesting_station.number_of_station}")
+            else:
+                print(f"Грузчик №{self.number}, его requesting_station={self.requesting_station}")
+            if not self.requesting_station:
+                self.requesting_station = self.checking_stations()  # Выбор свободной станции обслуживания
+            station_object = self.requesting_station
+
+            # Грузчик отпраляется на запросившую ремонт станцию обслуживания
+            if station_object:
+                yield from self.departure_from_warehouse_to_station(WAREHOSE_STATION_SIZE2, station_object)
+
+            # Говорим грузовику отпрваится на склад за новыми запчастями:
+            yield from self.ordering_new_details()
+
+            # Отправление грузчика при завершении ремонта со станции обратно на склад:
+            yield from self.return_to_warehouse()
+            yield self.env.timeout(50)
 
     def __call__(self, screen):
         self.image1 = self.image.get_rect(topleft=(self.x, self.y))
