@@ -398,7 +398,6 @@ class Loader:
                 warehouse_loaders += 1
                 self.warehose_status = "empty"
 
-
     # def departure_from_warehouse_to_station(self, requesting_station):
     #     global warehouse_loaders
     #     if requesting_station.loader_to_station == 0:
@@ -426,20 +425,6 @@ class Loader:
             self.loader_details = details_required
             self.warehose_status = "full"
 
-
-    def repair_finishing(self, status):
-        """
-        Конец ремонта грузчиками на стации тех.обслуживания(№1 или №2)
-         и возвращение на склад
-        """
-        self.loader_details = 0
-        if status == "on_service_station1":
-            station1.repairing = "done"
-            station1.station_repair = "ready"
-        elif status == "on_service_station2":
-            station2.repairing = "done"
-            station2.station_repair = "ready"
-
     def checking_stations(self):
         """
         Проверка станций - выбор станции, к которой нужно перенсти детали со склада
@@ -464,7 +449,6 @@ class Loader:
                 self.requesting_station = self.checking_stations()  # Выбор свободной станции обслуживания
             station_object = self.requesting_station
 
-
             # При выборе грузчиком нуждающейся станции, достаточном количестве деталей на складе, он отправляется на станцию обслуживания
             if station_object:
                 station_number = station_object.number_of_station
@@ -481,7 +465,6 @@ class Loader:
                         if self.search_status == "done":
                             yield env.process(self.go_to_requesting_details_station(requesting_station=station_object))
 
-
             # Говорим грузовику отпраится на склад за новыми запчастями:
             for station_object in stations_objects:
                 yield from self.ordering_new_details(station_object)
@@ -489,7 +472,6 @@ class Loader:
             # Отправление грузчика при завершении ремонта со станции обратно на склад:
             yield from self.return_to_warehouse()
             yield self.env.timeout(50)
-
 
     def return_to_warehouse(self):
         """
@@ -499,13 +481,17 @@ class Loader:
         if "on_service_station" in self.status:
             self.status_now = "to_warehouse"
             for station_object in stations_objects:
-                if station_object.repairing == "now" and self.status == "on_service_station"+str(station_object.number_of_station):
+                if station_object.repairing == "now" and self.status == "on_service_station" + str(
+                        station_object.number_of_station):
                     yield self.env.timeout(self.repair_time)  # Время ремонта
-                    self.repair_finishing(status=self.status)
-                if self.status == "on_service_station"+str(station_object.number_of_station):
+                    self.loader_details = 0
+                    if self.status == "on_service_station" + str(station_object.number_of_station):
+                        station_object.repairing = "done"
+                        station_object.station_repair = "ready"
+
+                if self.status == "on_service_station" + str(station_object.number_of_station):
                     station_object.loaders_count_on_station = 0
             self.to_warehouse()
-
 
     def ordering_new_details(self, station_object):
         """
