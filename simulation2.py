@@ -410,10 +410,8 @@ class Loader:
 
     def departure_from_warehouse_to_station(self, requesting_station):
         global warehouse_loaders
-
         if "to_station" not in self.status_now:
             self.status_now = "to_station" + str(requesting_station.number_of_station)
-            #requesting_station.loader_to_station = 1
         if warehouse_loaders != 0:
             warehouse_loaders -= 1
 
@@ -427,6 +425,7 @@ class Loader:
             WAREHOSE_STATION_SIZE2 -= details_required
             self.loader_details = details_required
             self.warehose_status = "full"
+
 
     def repair_finishing(self, status):
         """
@@ -457,7 +456,6 @@ class Loader:
 
         while True:
             # Станция обслуживания выбирается только один раз для каждого из самолетов
-            # print(f"Грузчик №{self.number}, его requesting_station={self.requesting_station.number_of_station}")
             if self.requesting_station:
                 print(f"Грузчик №{self.number}, его requesting_station={self.requesting_station.number_of_station}")
             else:
@@ -465,7 +463,7 @@ class Loader:
             if not self.requesting_station:
                 self.requesting_station = self.checking_stations()  # Выбор свободной станции обслуживания
             station_object = self.requesting_station
-            # station_number = station_object.number_of_station
+
 
             # При выборе грузчиком нуждающейся станции, достаточном количестве деталей на складе, он отправляется на станцию обслуживания
             if station_object:
@@ -486,38 +484,48 @@ class Loader:
 
             # Говорим грузовику отпраится на склад за новыми запчастями:
             for station_object in stations_objects:
-                if WAREHOSE_STATION_SIZE2 < station_object.details_required:
-                    # Ждем грузовик с новыми запчастями и пополняем запас склада
-                    if truck.status == "in_warehouse":
-                        yield env.process(truck.to_production())
-
-                    # Грузовик находится на производстве:
-                    if truck.status == "on_production":
-                        if truck.loading_status == "now":
-                            yield env.process(truck.loading())
-                            truck.loading_status = "done"
-                        if truck.loading_status == "done":
-                            yield env.process(truck.to_warehouse())
-                            if truck.y == 240 and truck.x == 600:
-                                WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX
+                yield from self.ordering_new_details(station_object)
 
             # Отправление грузчика при завершении ремонта со станции обратно на склад:
-            if self.status == "on_service_station1" or self.status == "on_service_station2":
-                self.status_now = "to_warehouse"
-                if station1.repairing == "now" and self.status == "on_service_station1":
-                    yield self.env.timeout(self.repair_time)  # Время ремонта
-                    self.repair_finishing(status=self.status)
-                if self.status == "on_service_station1":
-                    station1.loaders_count_on_station = 0
-
-                if station2.repairing == "now" and self.status == "on_service_station2":
-                    yield self.env.timeout(self.repair_time)  # Время ремонта
-                    self.repair_finishing(status=self.status)
-                if self.status == "on_service_station2":
-                    station2.loaders_count_on_station = 0
-
-                self.to_warehouse()
+            yield from self.return_to_warehouse()
             yield self.env.timeout(50)
+
+
+    def return_to_warehouse(self):
+        """
+        Если грузчик на станции обслуживания и там находится самолет, требующий ремонта -
+        происходит ремонт, по завершению которого грузчик возвращается на склад
+        """
+        if "on_service_station" in self.status:
+            self.status_now = "to_warehouse"
+            for station_object in stations_objects:
+                if station_object.repairing == "now" and self.status == "on_service_station"+str(station_object.number_of_station):
+                    yield self.env.timeout(self.repair_time)  # Время ремонта
+                    self.repair_finishing(status=self.status)
+                if self.status == "on_service_station"+str(station_object.number_of_station):
+                    station_object.loaders_count_on_station = 0
+            self.to_warehouse()
+
+
+    def ordering_new_details(self, station_object):
+        """
+        Грузчики ищут на складе нужные для ремонта детали.
+        Если деталей недостаточно, они сообщают грузовику отправится на производство за новыми запчастями
+        """
+        global WAREHOSE_STATION_SIZE2
+        if WAREHOSE_STATION_SIZE2 < station_object.details_required:
+            # Ждем грузовик с новыми запчастями и пополняем запас склада
+            if truck.status == "in_warehouse":
+                yield env.process(truck.to_production())
+            # Грузовик находится на производстве:
+            if truck.status == "on_production":
+                if truck.loading_status == "now":
+                    yield env.process(truck.loading())
+                    truck.loading_status = "done"
+                if truck.loading_status == "done":
+                    yield env.process(truck.to_warehouse())
+                    if truck.y == 240 and truck.x == 600:
+                        WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX
 
     def __call__(self, screen):
         self.image1 = self.image.get_rect(topleft=(self.x, self.y))
