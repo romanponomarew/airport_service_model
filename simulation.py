@@ -7,6 +7,7 @@ import random
 import json
 import sys
 
+import time
 
 AIRPLANE_ARRIVING_TIME = [3000, 7000]  # Прибытие самолета каждые [min, max] секунд
 # Define constants for the screen width and height
@@ -19,7 +20,7 @@ AIRPLANE_SPEED_Y = 10
 # Loader_Settings######################
 LOADER_SPEED_X = 3
 LOADER_SPEED_Y = 2
-NUMBER_OF_LOADERS = 5
+NUMBER_OF_LOADERS = 3
 # Truck_Settings######################
 TRUCK_SPEED_X = 2
 TRUCK_SPEED_Y = 3
@@ -28,8 +29,7 @@ TRUCK_SPEED_Y = 3
 ############################################################
 stoyanka_counts = 0  # Кол-во самолетов на стоянке
 warehouse_loaders = 0  # Кол-во команд грузчиков на складе
-service_loaders1 = 0  # Кол-во команд грузчиков на станции тех.обслуживания №1
-service_loaders2 = 0  # Кол-во команд грузчиков на станции тех.обслуживания №2
+
 WAREHOSE_STATION_SIZE = 50  # Максимальное(изначальное) количество деталей на складе
 THRESHOLD = 20  # Порог имеющихся деталей для заказа новых запчастей (в %)
 number_station = 2
@@ -46,18 +46,26 @@ class Station:
         if self.number_of_station == 1:
             self.x = 285
             self.y = 280
+            self.x_loaders = 0
+            self.y_loaders = 230
         elif self.number_of_station == 2:
             self.x = 285
             self.y = 465
+            self.x_loaders = 0
+            self.y_loaders = 410
         elif self.number_of_station == 3:
             self.x = 0
             self.y = 0
+            self.x_loaders = 0
+            self.y_loaders = 0
 
-        self.station_status = 0  # Занята или свободна
-        self.stoyanka_to_station = 0  # Находится ли кто-то в пути от стоянки к станции
+        self.station_status = 0  # Занята или свободна(самолетом)
+        self.stoyanka_to_station = 0  # Находится ли какой-нибудь самолет в пути от стоянки к станции
         self.station_repair = ""  # Статус ремонта самолета на станции - "repair"/"ready"
         self.repairing = ""  # Ведется ли сейчас ремонт на 1 станции? (now/done)-ожидание грузчиком и самолетом ремонта
         self.details_required = 0  # Сколько деталей требуются для починки самолета на станции
+        self.loader_to_station = 0  # Находится ли кто-то из грузчиков в пути от склада к станции
+        self.loaders_count_on_station = 0
 
     def change_station_status_to_busy(self, station_number, airplane_number):
         """
@@ -69,7 +77,6 @@ class Station:
         self.station_status = 1
         if station_number == 1:
             self.stoyanka_to_station = 0
-
         elif station_number == 2:
             self.stoyanka_to_station = 0
         self.station_repair = "repair"
@@ -100,7 +107,6 @@ class Airplane:
         self.status_now = ""  # "on_parking", "on_station{№}", "to_station{№}", "from_station{№}"
         self.status = "arrived_on_airport"  # "on_parking", "on_service_station", "moving"
         self.name = name
-
         self.time_parking = 0  # Время прибытия на стоянку
         self.time_station = 0  # Время прибытия на станцию на ремонт
         self.time_leave = 0  # Самолет готов, покидает аэропорт
@@ -129,16 +135,15 @@ class Airplane:
         if self.status == "on_parking":
             stoyanka_counts = stoyanka_counts + 1
             self.time_parking = round(env.now / 1000)
-            self.monitoring = "Самолет1 на парковке"
-            self.time_now = round(env.now / 1000)
             event = f"Самолет{self.name} на парковке"
             event_time = round(env.now / 1000)
-
 
     def go_to_free_station(self, selected_station):
         """Перемещение самолета от стоянки на СВОБОДНУЮ станцию обслуживания"""
         global stoyanka_counts
         global event_time, event
+
+        station_number = selected_station.number_of_station
         # Движение по горизонтиали:
         self.x += AIRPLANE_SPEED_X
         if 150 < self.x < 154:
@@ -157,8 +162,9 @@ class Airplane:
                 self.status = "on_service_station"
             # Увеличиваем количество самолетов на стоянке
             if self.status == "on_service_station":
-                selected_station.change_station_status_to_busy(station_number=int(selected_station.number_of_station), airplane_number=self.name)
-                self.status_now = "on_station" + str(selected_station.number_of_station)
+                selected_station.change_station_status_to_busy(station_number=int(station_number),
+                                                               airplane_number=self.name)
+                self.status_now = "on_station" + str(station_number)
 
     def checking_stations(self):
         """
@@ -166,7 +172,6 @@ class Airplane:
         Уменьшаем кол-во самолетов на стоянке на 1 при отправлении к свободной станции обслжуивания
         """
         global stoyanka_counts
-
         for station_object in stations_objects:
             if self.status == "on_parking" and station_object.station_status == 0 and station_object.stoyanka_to_station == 0:
                 if "to_station" not in self.status_now:
@@ -180,14 +185,12 @@ class Airplane:
         """
         При нахождении самолета на станции обслуживания происходит подсчет необходимых для ремонта деталей
         """
-        if self.status_now == "on_station1" and station1.station_repair == "ready":
-            self.status_now = "from_station1"
-            station1.station_status = 0
-            station1.details_required = 0
-        if self.status_now == "on_station2" and station2.station_repair == "ready":
-            self.status_now = "from_station2"
-            station2.station_status = 0
-            station2.details_required = 0
+        for station_object in stations_objects:
+            station_number = str(station_object.number_of_station)
+            if self.status_now == ("on_station" + station_number) and station_object.station_repair == "ready":
+                self.status_now = "from_station" + station_number
+                station_object.station_status = 0
+                station_object.details_required = 0
 
     def leaving_airport(self):
         """Самолеты покидают аэропорт со станций обслуживания"""
@@ -207,8 +210,8 @@ class Airplane:
         Останавливаем программу, когда последний самолет покидает АТБ
         """
         global event_time, event
-        self.monitoring = "Самолет1 улетает"
-        self.time_now = round(env.now / 1000)
+        # self.monitoring = "Самолет1 улетает"
+        # self.time_now = round(env.now / 1000)
         self.time_result = self.time_leave - self.time_parking
         print(f"Общее время нахождения самолета{self.name} в аэропорту ={self.time_result}")
         results.append(self.time_result)
@@ -243,14 +246,14 @@ class Airplane:
 
             # # Перемещение самолета со стоянки на свободную станцию тех.обслуживания:
             if self.status == "on_parking":
-                if ("to_station" in self.status_now) and self.selected_station:
+                if "to_station" in self.status_now and self.selected_station:
                     yield self.env.timeout(100)
                     self.go_to_free_station(selected_station=self.selected_station)
 
-            # После ремонта(станция тех.обслуживания) самолет покидает аэропорт:
             if self.status == "on_service_station":
                 self.counting_required_details()
-                if self.status_now in ["from_station1", "from_station2"]:
+                # После ремонта(станция тех.обслуживания) самолет покидает аэропорт:
+                if "from_station" in self.status_now:
                     self.leaving_airport()
                     if simulation_run:
                         self.time_leave = round(env.now / 1000)
@@ -266,10 +269,9 @@ class Airplane:
 
 class Loader:
     """Команда грузчиков"""
-    to_station1 = 0  # Отправился ли кто-то от склада к станции тех.обслуживания1(=1 только пока в пути)
-    to_station2 = 0  # Отправился ли кто-то от склада к станции тех.обслуживания2(=1 только пока в пути)
 
-    def __init__(self, env):
+    def __init__(self, env, number):
+        self.number = number
         self.IMG_size = 45
         self.image = pygame.image.load("loader.png")  # Загрузка в pygame картинки
         self.image = pygame.transform.scale(self.image, (self.IMG_size, self.IMG_size))  # Изменение размера картинки
@@ -287,72 +289,47 @@ class Loader:
         self.warehose_status = "empty"  # "empty", "full"
         self.loader_details = 0  # Запчасти которые несет с собой грузчик от склада к станции
 
-    def to_service_station1(self):
-        global env
-        global service_loaders1
-        global WAREHOSE_STATION_SIZE2
-        """Перемещение грузчиков от склада к станции тех.обслуживания №1"""
-        self.x -= LOADER_SPEED_X
-        if self.x < 450 and self.y != 410 and self.y != 230:
-            self.x = 450
+        self.requesting_station = 0  # Выбор станции, к которой нужно перенести детали со склада
 
-            """К станции тех.обслуживания №1:"""
-            self.y -= LOADER_SPEED_Y
-            if self.y < 230:
-                self.y = 230
-
-        if self.y == 230 or self.y == 410:
-            self.x -= LOADER_SPEED_X
-            if self.x < 400:
-                self.x = 400
-                self.status = "on_service_station1"
-                self.image = pygame.image.load("loader_empty1.png")  # Загрузка в pygame картинки
-                self.image = pygame.transform.scale(self.image,
-                                                    (self.IMG_size, self.IMG_size))  # Изменение размера картинки
-                service_loaders1 = 1
-                Loader.to_station1 = 0
-                station1.repairing = "now"
-        yield self.env.timeout(10)  ###### Для того чтобы можно было вызвать как генератор
-
-    def to_service_station2(self):
-        global service_loaders2
-        """Перемещение грузчиков от склада к станции тех.обслуживания №1"""
+    def go_to_requesting_details_station(self, requesting_station):
+        """
+        Перемещение грузчиков от склада к станции тех.обслуживания,
+        которой нужны запчасти со склада
+        """
+        number_of_station = requesting_station.number_of_station
         self.x -= LOADER_SPEED_X
         if self.x < 450 and self.y != 410 and self.y != 230:
             self.x = 450
             """К станции тех.обслуживания №2:"""
             self.y += LOADER_SPEED_Y
-            if self.y > 410:
-                self.y = 410
+            if self.y > requesting_station.y_loaders:
+                self.y = requesting_station.y_loaders
 
         if self.y == 230 or self.y == 410:
             self.x -= (LOADER_SPEED_X - 1)
             if self.x < 400:
                 self.x = 400
-                self.status = "on_service_station2"
+                self.status = "on_service_station" + str(number_of_station)
                 self.image = pygame.image.load("loader_empty1.png")  # Загрузка в pygame картинки
                 self.image = pygame.transform.scale(self.image,
                                                     (self.IMG_size, self.IMG_size))  # Изменение размера картинки
-                service_loaders2 = 1
-                Loader.to_station2 = 0
-                station2.repairing = "now"
+                requesting_station.loaders_count_on_station = 1
+                requesting_station.loader_to_station = 0
+                requesting_station.repairing = "now"
+                self.requesting_station = 0
+
         yield self.env.timeout(10)  ###### Для того чтобы можно было вызвать как генератор
 
     def to_warehouse(self):
-        """Перемещение грузчиков от станции тех.обслуживания(1 или 2) к складу"""
+        """Перемещение грузчиков от станции тех.обслуживания к складу"""
         global warehouse_loaders
         self.x += LOADER_SPEED_X
         if self.x > 450 and self.y != 380:
             self.x = 450
-            """От станции тех.обслуживания №2:"""
-            # self.y -= 2
-            # if self.y < 380:
-            #     self.y = 380
-            """От станции тех.обслуживания №1:"""
+            # От станции тех.обслуживания
             self.y += LOADER_SPEED_Y
             if self.y > 380:
                 self.y = 380
-
         if self.y == 380:
             self.x += LOADER_SPEED_X
             if self.x > 650:
@@ -365,23 +342,38 @@ class Loader:
                 warehouse_loaders += 1
                 self.warehose_status = "empty"
 
-    def departure_from_warehouse_to_station1(self):
-        global warehouse_loaders
-        if Loader.to_station1 == 0:
-            if self.status_now != "to_station2":
-                self.status_now = "to_station1"
-                Loader.to_station1 = 1
-            if warehouse_loaders != 0:
-                warehouse_loaders -= 1
+    def checking_stations(self):
+        """
+        Проверка станций - выбор станции, к которой нужно перенсти детали со склада
+        """
+        for station_object in stations_objects:
+            if self.status == "in_warehouse" and not station_object.loaders_count_on_station:
+                if station_object.station_status and not station_object.loader_to_station:
+                    station_object.loader_to_station = 1
+                    return station_object
 
-    def departure_from_warehouse_to_station2(self):
+    def departure_from_warehouse_to_station(self, WAREHOSE_STATION_SIZE2, station_object):
+        """
+        Если грузчиком получен запрос станции о ремонте, он проверяет:
+         1.находится ли кто-то из грузчиков уже в пути
+         2.есть ли на складе нужные запчасти
+        Забирает детали со склада и отправляется к нужной станции
+        """
         global warehouse_loaders
-        if Loader.to_station2 == 0:
-            if self.status_now != "to_station1":
-                self.status_now = "to_station2"
-                Loader.to_station2 = 1
-            if warehouse_loaders != 0:
-                warehouse_loaders -= 1
+        station_number = station_object.number_of_station
+        if "to_station" not in self.status_now:
+            self.status_now = "to_station" + str(station_object.number_of_station)
+        if warehouse_loaders != 0:
+            warehouse_loaders -= 1
+        if station_object.loader_to_station and self.status_now == f"to_station{station_number}" and WAREHOSE_STATION_SIZE2 > station_object.details_required:
+            self.take_details_from_warehouse(details_required=station_object.details_required)
+            if self.loader_details != 0:
+                if self.search_status == "search":
+                    yield self.env.timeout(
+                        self.search_time * station_object.details_required)  # Время поиска запчастей для ст.тех.обсл. на складе
+                    self.search_status = "done"
+                if self.search_status == "done":
+                    yield env.process(self.go_to_requesting_details_station(requesting_station=station_object))
 
     def take_details_from_warehouse(self, details_required):
         """
@@ -394,60 +386,17 @@ class Loader:
             self.loader_details = details_required
             self.warehose_status = "full"
 
-    def repair_finishing(self, status):
+    def ordering_new_details(self):
         """
-        Конец ремонта грузчиками на стации тех.обслуживания(№1 или №2)
-         и возвращение на склад
+        Грузчики ищут на складе нужные для ремонта детали.
+        Если деталей недостаточно, они сообщают грузовику отправится на производство за новыми запчастями
         """
-        self.loader_details = 0
-        if status == "on_service_station1":
-            station1.repairing = "done"
-            station1.station_repair = "ready"
-        elif status == "on_service_station2":
-            station2.repairing = "done"
-            station2.station_repair = "ready"
-
-    def run(self):
-        global warehouse_loaders
-        global service_loaders1, service_loaders2
         global WAREHOSE_STATION_SIZE2
-
-        while True:
-            # Отправление грузчика с запчастями от склада к станции тех.обслуживания №1:
-            if self.status == "in_warehouse" and not service_loaders1 and station1.station_status:
-                self.departure_from_warehouse_to_station1()
-
-                if Loader.to_station1 and self.status_now == "to_station1" and WAREHOSE_STATION_SIZE2 > station1.details_required:
-                    self.take_details_from_warehouse(details_required=station1.details_required)
-
-                    if self.loader_details != 0:
-                        if self.search_status == "search":
-                            yield self.env.timeout(
-                                self.search_time * station1.details_required)  # Время поиска запчастей для ст.тех.обсл.1 на складе
-                            self.search_status = "done"
-                        if self.search_status == "done":
-                            yield env.process(self.to_service_station1())
-
-            # Отправление грузчика с запчастями от склада к станции тех.обслуживания №2:
-            if self.status == "in_warehouse" and not service_loaders2 and station2.station_status:
-                self.departure_from_warehouse_to_station2()
-
-                if Loader.to_station2 and self.status_now == "to_station2" and WAREHOSE_STATION_SIZE2 > station2.details_required:
-                    self.take_details_from_warehouse(details_required=station2.details_required)
-
-                    if self.loader_details != 0:
-                        if self.search_status == "search":
-                            yield self.env.timeout(
-                                self.search_time * station2.details_required)  # Время поиска запчастей для ст.тех.обсл.2 на складе
-                            self.search_status = "done"
-                        if self.search_status == "done":
-                            yield env.process(self.to_service_station2())
-
-            if WAREHOSE_STATION_SIZE2 < station1.details_required or WAREHOSE_STATION_SIZE2 < station2.details_required:
+        for station_object in stations_objects:
+            if WAREHOSE_STATION_SIZE2 < station_object.details_required:
                 # Ждем грузовик с новыми запчастями и пополняем запас склада
                 if truck.status == "in_warehouse":
                     yield env.process(truck.to_production())
-
                 # Грузовик находится на производстве:
                 if truck.status == "on_production":
                     if truck.loading_status == "now":
@@ -458,21 +407,47 @@ class Loader:
                         if truck.y == 240 and truck.x == 600:
                             WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX
 
-            if self.status == "on_service_station1" or self.status == "on_service_station2":
-                self.status_now = "to_warehouse"
-                if station1.repairing == "now" and self.status == "on_service_station1":
+    def return_to_warehouse(self):
+        """
+        Если грузчик на станции обслуживания и там находится самолет, требующий ремонта -
+        происходит ремонт, по завершению которого грузчик возвращается на склад
+        """
+        if "on_service_station" in self.status:
+            self.status_now = "to_warehouse"
+            for station_object in stations_objects:
+                if station_object.repairing == "now" and self.status == "on_service_station" + str(
+                        station_object.number_of_station):
+                    # Ремонт на текущей станции:
                     yield self.env.timeout(self.repair_time)  # Время ремонта
-                    self.repair_finishing(status=self.status)
-                if self.status == "on_service_station1":
-                    service_loaders1 = 0
+                    self.loader_details = 0
+                    if self.status == "on_service_station" + str(station_object.number_of_station):
+                        station_object.repairing = "done"
+                        station_object.station_repair = "ready"
+                if self.status == "on_service_station" + str(station_object.number_of_station):
+                    station_object.loaders_count_on_station = 0
+            # Отправление грузчика на склад:
+            self.to_warehouse()
 
-                if station2.repairing == "now" and self.status == "on_service_station2":
-                    yield self.env.timeout(self.repair_time)  # Время ремонта
-                    self.repair_finishing(status=self.status)
-                if self.status == "on_service_station2":
-                    service_loaders2 = 0
+    def run(self):
+        while True:
+            # Станция обслуживания выбирается только один раз для каждого из самолетов
+            if self.requesting_station:
+                print(f"Грузчик №{self.number}, его requesting_station={self.requesting_station.number_of_station}")
+            else:
+                print(f"Грузчик №{self.number}, его requesting_station={self.requesting_station}")
+            if not self.requesting_station:
+                self.requesting_station = self.checking_stations()  # Выбор свободной станции обслуживания
+            station_object = self.requesting_station
 
-                self.to_warehouse()
+            # Грузчик отпраляется на запросившую ремонт станцию обслуживания
+            if station_object:
+                yield from self.departure_from_warehouse_to_station(WAREHOSE_STATION_SIZE2, station_object)
+
+            # Говорим грузовику отпрваится на склад за новыми запчастями:
+            yield from self.ordering_new_details()
+
+            # Отправление грузчика при завершении ремонта со станции обратно на склад:
+            yield from self.return_to_warehouse()
             yield self.env.timeout(50)
 
     def __call__(self, screen):
@@ -486,7 +461,6 @@ class Truck:
         При количестве деталей на складе меньше допустимого предела - перемещается на производство,
         загружает детали и везет обратно на склад
     """
-
     def __init__(self, env):
         self.IMG_size = 70
         self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
@@ -512,7 +486,6 @@ class Truck:
         self.y -= TRUCK_SPEED_Y
         if self.y < 50:
             self.y = 50
-
             self.x += TRUCK_SPEED_X
             if self.x > 660:
                 self.x = 660
@@ -524,7 +497,6 @@ class Truck:
                 self.loading_status = "now"
                 event = "Грузовик на заводе"
                 event_time = round(env.now / 1000)
-
         yield self.env.timeout(10)  # # Для того чтобы можно было вызвать как генератор
 
     def to_warehouse(self):
@@ -535,7 +507,6 @@ class Truck:
         self.x -= TRUCK_SPEED_X
         if self.x < 600:
             self.x = 600
-
             self.y += TRUCK_SPEED_Y
             if self.y > 240:
                 self.y = 240
@@ -585,14 +556,14 @@ class Monitoring:
         # ################### Отображение кол-ва деталей на станции тех.обслуживания №1: ###################
         self.parameter_displaying(text=details_required_text, parameter=station1.details_required, x=240, y=165)
         # ################### Отображение кол-ва команд механиков на станции тех.обслуживания №1: ###################
-        self.parameter_displaying(text=loaders_counts_text, parameter=service_loaders1, x=250, y=190)
+        self.parameter_displaying(text=loaders_counts_text, parameter=station1.loaders_count_on_station, x=250, y=190)
 
         # ################### Отображение кол-ва самолетов на станции тех.обслуживания №2: ###################
         self.parameter_displaying(text=airplanes_counts_text, parameter=station2.station_status, x=250, y=390)
         # ################### Отображение кол-ва деталей на станции тех.обслуживания №2: ###################
         self.parameter_displaying(text=details_required_text, parameter=station2.details_required, x=240, y=340)
         # ################### Отображение кол-ва команд механиков на станции тех.обслуживания №2: ###################
-        self.parameter_displaying(text=loaders_counts_text, parameter=service_loaders2, x=250, y=365)
+        self.parameter_displaying(text=loaders_counts_text, parameter=station2.loaders_count_on_station, x=250, y=365)
 
         # ################### Отображение кол-ва команд грузчиков на складе: ###################
         self.parameter_displaying(text=loaders_counts_text, parameter=warehouse_loaders, x=778, y=300)
@@ -640,7 +611,7 @@ stations_objects = [station1, station2]
 
 airplanes = [Airplane(env, i) for i in range(1, 11)]
 
-mechanics = [Loader(env) for i in range(NUMBER_OF_LOADERS)]
+mechanics = [Loader(env, number=i) for i in range(1, NUMBER_OF_LOADERS + 1)]
 for mechanic in mechanics:
     renderer.add(mechanic)
     env.process(mechanic.run())
