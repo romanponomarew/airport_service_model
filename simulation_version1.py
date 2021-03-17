@@ -24,7 +24,7 @@ TOTAL_NUMBER_OF_AIRPLANES = 20
 # Define constants for the screen width and height
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 700
-SIMULATION_SPEED = 0.0005  # 0.001 - NORMAL_speed, 0.0001 - FAST_speed, 0.0000000001 - MAX_speed
+SIMULATION_SPEED = 0.0001  # 0.005 - NORMAL_speed, 0.0001 - FAST_speed, 0.0000000001 - MAX_speed
 # Airplane_Settings####################
 AIRPLANE_SPEED_X = 3
 AIRPLANE_SPEED_Y = 10
@@ -54,18 +54,16 @@ class Station:
     def __init__(self, number_of_station):
         self.number_of_station = number_of_station
         self.x = 355
+        self.x_loaders = 450
 
         if self.number_of_station == 1:
             self.y = 265
-            # self.x_loaders = 0
             self.y_loaders = 230
         elif self.number_of_station == 2:
             self.y = 420
-            # self.x_loaders = 0
-            self.y_loaders = 410
+            self.y_loaders = 380
         elif self.number_of_station == 3:
             self.y = 590
-            # self.x_loaders = 0
             self.y_loaders = 560  # TODO: Подобрать координату
 
         self.station_status = 0  # Занята или свободна(самолетом)
@@ -266,22 +264,17 @@ class Airplane:
                         simulation_run = False
                         self.stopping_simulation()
 
-            print("---------")
-            print("Параметры station3:")
-            print("station3.station_status=", station3.station_status)  # Занята или свободна(самолетом)
-            print("station3.stoyanka_to_station=", station3.stoyanka_to_station) # Находится ли какой-нибудь самолет в пути от стоянки к станции
-            print("station3.station_repair=", station3.station_repair)  # Статус ремонта самолета на станции - "repair"/"ready"
-            print("station3.repairing=", station3.repairing)  # Ведется ли сейчас ремонт на 1 станции? (now/done)-ожидание грузчиком и самолетом ремонта
-            print("station3.details_required=", station3.details_required)  # Сколько деталей требуются для починки самолета на станции
-            print("station3.loader_to_station=", station3.loader_to_station)  # Находится ли кто-то из грузчиков в пути от склада к станции
-            print("station3.loaders_count_on_station", station3.loaders_count_on_station)
-            # self.station_status = 0  # Занята или свободна(самолетом)
-            # self.stoyanka_to_station = 0  # Находится ли какой-нибудь самолет в пути от стоянки к станции
-            # self.station_repair = ""  # Статус ремонта самолета на станции - "repair"/"ready"
-            # self.repairing = ""  # Ведется ли сейчас ремонт на 1 станции? (now/done)-ожидание грузчиком и самолетом ремонта
-            # self.details_required = 0  # Сколько деталей требуются для починки самолета на станции
-            # self.loader_to_station = 0  # Находится ли кто-то из грузчиков в пути от склада к станции
-            # self.loaders_count_on_station = 0
+            # for station in stations_objects:
+            #     station_number = station.number_of_station
+            #     print("---------")
+            #     print(f"Параметры station{station_number}:")
+            #     print(f"station{station_number}.station_status=", station.station_status)  # Занята или свободна(самолетом)
+            #     print(f"station{station_number}.stoyanka_to_station=", station.stoyanka_to_station) # Находится ли какой-нибудь самолет в пути от стоянки к станции
+            #     print(f"station{station_number}.station_repair=", station.station_repair)  # Статус ремонта самолета на станции - "repair"/"ready"
+            #     print(f"station{station_number}.repairing=", station.repairing)  # Ведется ли сейчас ремонт на 1 станции? (now/done)-ожидание грузчиком и самолетом ремонта
+            #     print(f"station{station_number}.details_required=", station.details_required)  # Сколько деталей требуются для починки самолета на станции
+            #     print(f"station{station_number}.loader_to_station=", station.loader_to_station)  # Находится ли кто-то из грузчиков в пути от склада к станции
+            #     print(f"station{station_number}.loaders_count_on_station", station.loaders_count_on_station)
             yield self.env.timeout(20)
 
     def __call__(self, screen):
@@ -299,7 +292,7 @@ class Loader:
         self.image = pygame.image.load("loader.png")  # Загрузка в pygame картинки
         self.image = pygame.transform.scale(self.image, (self.IMG_size, self.IMG_size))  # Изменение размера картинки
         self.x = 740  # Изначальное положение центра картинки(На складе)
-        self.y = 390
+        self.y = station2.y_loaders
         self.env = env
         self.status_now = ""  # "on_parking", "on_service_station", "moving"
         self.status = "in_warehouse"  # "on_service_station", "moving"
@@ -320,26 +313,29 @@ class Loader:
         которой нужны запчасти со склада
         """
         number_of_station = requesting_station.number_of_station
-        self.x -= LOADER_SPEED_X
-        if self.x < 450 and self.y != 410 and self.y != 230:
-            self.x = 450
-            """К станции тех.обслуживания №2:"""
-            self.y += LOADER_SPEED_Y
-            if self.y > requesting_station.y_loaders:
-                self.y = requesting_station.y_loaders
 
-        if self.y == 230 or self.y == 410:
-            self.x -= (LOADER_SPEED_X - 1)
-            if self.x < 400:
-                self.x = 400
-                self.status = "on_service_station" + str(number_of_station)
-                self.image = pygame.image.load("loader_empty1.png")  # Загрузка в pygame картинки
-                self.image = pygame.transform.scale(self.image,
-                                                    (self.IMG_size, self.IMG_size))  # Изменение размера картинки
-                requesting_station.loaders_count_on_station = 1
-                requesting_station.loader_to_station = 0
-                requesting_station.repairing = "now"
-                self.requesting_station = 0
+        if self.x > 570:
+            self.x -= LOADER_SPEED_X
+
+        if self.y == requesting_station.y_loaders and self.x > requesting_station.x_loaders:  # requesting_station == 2
+            self.x -= LOADER_SPEED_X
+        elif self.y > requesting_station.y_loaders:
+            self.y -= LOADER_SPEED_Y
+        elif self.y < requesting_station.y_loaders:
+            self.y += LOADER_SPEED_Y
+        else:
+            self.x = requesting_station.x_loaders
+            self.y = requesting_station.y_loaders
+
+        if self.x == requesting_station.x_loaders and self.y == requesting_station.y_loaders:
+            self.status = "on_service_station" + str(number_of_station)
+            self.image = pygame.image.load("loader_empty1.png")  # Загрузка в pygame картинки
+            self.image = pygame.transform.scale(self.image,
+                                                (self.IMG_size, self.IMG_size))  # Изменение размера картинки
+            requesting_station.loaders_count_on_station = 1
+            requesting_station.loader_to_station = 0
+            requesting_station.repairing = "now"
+            self.requesting_station = 0
 
         yield self.env.timeout(10)  # Для того чтобы можно было вызвать как генератор
 
@@ -556,7 +552,7 @@ class Monitoring:
 
     def __init__(self, stoyanka_counts):
         self.stoyanka_counts = stoyanka_counts
-        #self.font = pygame.font.Font(None, 20)
+        # self.font = pygame.font.Font(None, 20)
         self.font_10 = pygame.font.Font(None, 18)
 
     def parameter_displaying(self, text: str, parameter, x, y, indent=0):
