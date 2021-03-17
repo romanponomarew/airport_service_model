@@ -20,10 +20,11 @@ import sys
 import time
 
 AIRPLANE_ARRIVING_TIME = [3000, 7000]  # Прибытие самолета каждые [min, max] секунд
+TOTAL_NUMBER_OF_AIRPLANES = 20
 # Define constants for the screen width and height
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 700
-SIMULATION_SPEED = 0.0001  # 0.001 - NORMAL_speed, 0.0001 - FAST_speed, 0.0000000001 - MAX_speed
+SIMULATION_SPEED = 0.0005  # 0.001 - NORMAL_speed, 0.0001 - FAST_speed, 0.0000000001 - MAX_speed
 # Airplane_Settings####################
 AIRPLANE_SPEED_X = 3
 AIRPLANE_SPEED_Y = 10
@@ -63,9 +64,9 @@ class Station:
             # self.x_loaders = 0
             self.y_loaders = 410
         elif self.number_of_station == 3:
-            self.y = 0
+            self.y = 590
             # self.x_loaders = 0
-            self.y_loaders = 0
+            self.y_loaders = 560  # TODO: Подобрать координату
 
         self.station_status = 0  # Занята или свободна(самолетом)
         self.stoyanka_to_station = 0  # Находится ли какой-нибудь самолет в пути от стоянки к станции
@@ -75,7 +76,7 @@ class Station:
         self.loader_to_station = 0  # Находится ли кто-то из грузчиков в пути от склада к станции
         self.loaders_count_on_station = 0
 
-    def change_station_status_to_busy(self, station_number, airplane_number):
+    def change_station_status_to_busy(self, airplane_number):
         """
         При прибытии самолета на станцию обслуживания
         изменить ее статус на занятый ремонтом
@@ -83,10 +84,7 @@ class Station:
         global event, event_time
 
         self.station_status = 1
-        if station_number == 1:
-            self.stoyanka_to_station = 0
-        elif station_number == 2:
-            self.stoyanka_to_station = 0
+        self.stoyanka_to_station = 0
         self.station_repair = "repair"
         self.details_required = random.randint(1, 30)
         event = f"Самолет{airplane_number} на ремонте(1)"
@@ -170,8 +168,7 @@ class Airplane:
                 self.status = "on_service_station"
             # Увеличиваем количество самолетов на стоянке
             if self.status == "on_service_station":
-                selected_station.change_station_status_to_busy(station_number=int(station_number),
-                                                               airplane_number=self.name)
+                selected_station.change_station_status_to_busy(airplane_number=self.name)
                 self.status_now = "on_station" + str(station_number)
 
     def checking_stations(self):
@@ -268,6 +265,23 @@ class Airplane:
                         self.time_leave = round(env.now / 1000)
                         simulation_run = False
                         self.stopping_simulation()
+
+            print("---------")
+            print("Параметры station3:")
+            print("station3.station_status=", station3.station_status)  # Занята или свободна(самолетом)
+            print("station3.stoyanka_to_station=", station3.stoyanka_to_station) # Находится ли какой-нибудь самолет в пути от стоянки к станции
+            print("station3.station_repair=", station3.station_repair)  # Статус ремонта самолета на станции - "repair"/"ready"
+            print("station3.repairing=", station3.repairing)  # Ведется ли сейчас ремонт на 1 станции? (now/done)-ожидание грузчиком и самолетом ремонта
+            print("station3.details_required=", station3.details_required)  # Сколько деталей требуются для починки самолета на станции
+            print("station3.loader_to_station=", station3.loader_to_station)  # Находится ли кто-то из грузчиков в пути от склада к станции
+            print("station3.loaders_count_on_station", station3.loaders_count_on_station)
+            # self.station_status = 0  # Занята или свободна(самолетом)
+            # self.stoyanka_to_station = 0  # Находится ли какой-нибудь самолет в пути от стоянки к станции
+            # self.station_repair = ""  # Статус ремонта самолета на станции - "repair"/"ready"
+            # self.repairing = ""  # Ведется ли сейчас ремонт на 1 станции? (now/done)-ожидание грузчиком и самолетом ремонта
+            # self.details_required = 0  # Сколько деталей требуются для починки самолета на станции
+            # self.loader_to_station = 0  # Находится ли кто-то из грузчиков в пути от склада к станции
+            # self.loaders_count_on_station = 0
             yield self.env.timeout(20)
 
     def __call__(self, screen):
@@ -442,10 +456,10 @@ class Loader:
     def run(self):
         while True:
             # Станция обслуживания выбирается только один раз для каждого из самолетов
-            if self.requesting_station:
-                print(f"Грузчик №{self.number}, его requesting_station={self.requesting_station.number_of_station}")
-            else:
-                print(f"Грузчик №{self.number}, его requesting_station={self.requesting_station}")
+            # if self.requesting_station:
+            #     print(f"Грузчик №{self.number}, его requesting_station={self.requesting_station.number_of_station}")
+            # else:
+            #     print(f"Грузчик №{self.number}, его requesting_station={self.requesting_station}")
             if not self.requesting_station:
                 self.requesting_station = self.checking_stations()  # Выбор свободной станции обслуживания
             station_object = self.requesting_station
@@ -593,12 +607,12 @@ class Monitoring:
 
 
 ###########################################################
-def airplane_generator(env, cars):
+def airplane_generator(env, airplanes_list):
     """Генерируем новые самолеты, которые прибывают на обслуживание"""
     for i in itertools.count():
         yield env.timeout(random.randint(AIRPLANE_ARRIVING_TIME[0], AIRPLANE_ARRIVING_TIME[1]))
-        if len(cars) != 0:
-            a = cars.pop(0)
+        if len(airplanes_list) != 0:
+            a = airplanes_list.pop(0)
             renderer.add(a)
             env.process(a.run())
 
@@ -620,9 +634,10 @@ renderer.add(Monitoring(stoyanka_counts))
 
 station1 = Station(number_of_station=1)
 station2 = Station(number_of_station=2)
-stations_objects = [station1, station2]
+station3 = Station(number_of_station=3)
+stations_objects = [station1, station2, station3]
 
-airplanes = [Airplane(env, i) for i in range(1, 11)]
+airplanes = [Airplane(env, i) for i in range(1, TOTAL_NUMBER_OF_AIRPLANES + 1)]
 
 mechanics = [Loader(env, number=i) for i in range(1, NUMBER_OF_LOADERS + 1)]
 for mechanic in mechanics:
