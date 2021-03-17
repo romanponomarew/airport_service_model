@@ -542,7 +542,8 @@ class Monitoring:
 
     def __init__(self, stoyanka_counts):
         self.stoyanka_counts = stoyanka_counts
-        self.font = pygame.font.Font(None, 20)
+        #self.font = pygame.font.Font(None, 20)
+        self.font_10 = pygame.font.Font(None, 18)
 
     def parameter_displaying(self, text: str, parameter, x, y, indent=0):
         """
@@ -550,9 +551,9 @@ class Monitoring:
         params:
             indent - Отступ параметра от текста
         """
-        display_text = self.font.render(text, True, (0, 0, 255))
+        display_text = self.font_10.render(text, True, (0, 0, 255))
         screen.blit(display_text, [x, y])
-        display_parametr = self.font.render(str(parameter), True, (0, 0, 255))
+        display_parametr = self.font_10.render(str(parameter), True, (0, 0, 255))
         screen.blit(display_parametr, [x + 130 + indent, y])
 
     def __call__(self, screen):
@@ -564,19 +565,18 @@ class Monitoring:
         # ################### Отображение кол-ва самолетов на стоянке: ###################
         self.parameter_displaying(text=airplanes_counts_text, parameter=stoyanka_counts, x=10, y=230)
 
-        # ################### Отображение кол-ва самолетов на станции тех.обслуживания №1: ###################
-        self.parameter_displaying(text=airplanes_counts_text, parameter=station1.station_status, x=250, y=215)
-        # ################### Отображение кол-ва деталей на станции тех.обслуживания №1: ###################
-        self.parameter_displaying(text=details_required_text, parameter=station1.details_required, x=240, y=165)
-        # ################### Отображение кол-ва команд механиков на станции тех.обслуживания №1: ###################
-        self.parameter_displaying(text=loaders_counts_text, parameter=station1.loaders_count_on_station, x=250, y=190)
-
-        # ################### Отображение кол-ва самолетов на станции тех.обслуживания №2: ###################
-        self.parameter_displaying(text=airplanes_counts_text, parameter=station2.station_status, x=250, y=390)
-        # ################### Отображение кол-ва деталей на станции тех.обслуживания №2: ###################
-        self.parameter_displaying(text=details_required_text, parameter=station2.details_required, x=240, y=340)
-        # ################### Отображение кол-ва команд механиков на станции тех.обслуживания №2: ###################
-        self.parameter_displaying(text=loaders_counts_text, parameter=station2.loaders_count_on_station, x=250, y=365)
+        for station in stations_objects:
+            # ################### Отображение кол-ва самолетов на станции тех.обслуживания: ###################
+            text_x = station.x - 45
+            text_y = station.y - 65
+            self.parameter_displaying(text=airplanes_counts_text, parameter=station.station_status, x=text_x,
+                                      y=text_y - 15)
+            # ################### Отображение кол-ва деталей на станции тех.обслуживания: ###################
+            self.parameter_displaying(text=details_required_text, parameter=station.details_required, x=text_x,
+                                      y=text_y - 30)
+            # ################### Отображение кол-ва команд механиков на станции тех.обслуживания: ###################
+            self.parameter_displaying(text=loaders_counts_text, parameter=station.loaders_count_on_station, x=text_x,
+                                      y=text_y)
 
         # ################### Отображение кол-ва команд грузчиков на складе: ###################
         self.parameter_displaying(text=loaders_counts_text, parameter=warehouse_loaders, x=778, y=300)
