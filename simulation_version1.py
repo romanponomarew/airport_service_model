@@ -199,13 +199,13 @@ class Airplane:
         """Самолеты покидают аэропорт со станций обслуживания"""
         # Движение по горизонтиали:
         self.x += 2
-        if self.x > 440 and self.y != 600:
-            self.x = 440
+        if self.x > 450 and self.y != 600:
+            self.x = 450
             # Движение по вертикали(до станции обслуживания №1):
             self.y += 3
             if self.y > 600:
                 self.y = 600
-        if self.x == 440 and self.y == 600:
+        if self.x == 450 and self.y == 600:
             self.x += 3
 
     def stopping_simulation(self):
@@ -285,13 +285,13 @@ class Airplane:
 
 class Loader:
     """Команда грузчиков"""
-
+    warehose_x = 740
     def __init__(self, env, number):
         self.number = number
         self.IMG_size = 40
         self.image = pygame.image.load("loader.png")  # Загрузка в pygame картинки
         self.image = pygame.transform.scale(self.image, (self.IMG_size, self.IMG_size))  # Изменение размера картинки
-        self.x = 740  # Изначальное положение центра картинки(На складе)
+        self.x = Loader.warehose_x  # Изначальное положение центра картинки(На складе)
         self.y = station2.y_loaders
         self.env = env
         self.status_now = ""  # "on_parking", "on_service_station", "moving"
@@ -351,8 +351,8 @@ class Loader:
                 self.y = 380
         if self.y == 380:
             self.x += LOADER_SPEED_X
-            if self.x > 650:
-                self.x = 650
+            if self.x > Loader.warehose_x:
+                self.x = Loader.warehose_x
                 self.status = "in_warehouse"
                 self.search_status = "search"
                 self.image = pygame.image.load("loader.png")  # Загрузка в pygame картинки
@@ -360,6 +360,29 @@ class Loader:
                                                     (self.IMG_size, self.IMG_size))  # Изменение размера картинки
                 warehouse_loaders += 1
                 self.warehose_status = "empty"
+
+    # def to_warehouse(self, station):
+    #     # TODO:
+    #     """Перемещение грузчиков от станции тех.обслуживания к складу"""
+    #     global warehouse_loaders
+    #     self.x += LOADER_SPEED_X
+    #     if self.x > station.x_loaders and self.y != station.y_loaders:
+    #         self.x = station.x_loaders
+    #         # От станции тех.обслуживания
+    #         self.y += LOADER_SPEED_Y
+    #         if self.y > station.y_loaders:
+    #             self.y = station.y_loaders
+    #     if self.y == station.y_loaders:
+    #         self.x += LOADER_SPEED_X
+    #         if self.x > Loader.warehose_x:
+    #             self.x = Loader.warehose_x
+    #             self.status = "in_warehouse"
+    #             self.search_status = "search"
+    #             self.image = pygame.image.load("loader.png")  # Загрузка в pygame картинки
+    #             self.image = pygame.transform.scale(self.image,
+    #                                                 (self.IMG_size, self.IMG_size))  # Изменение размера картинки
+    #             warehouse_loaders += 1
+    #             self.warehose_status = "empty"
 
     def checking_stations(self):
         """
@@ -482,14 +505,18 @@ class Truck:
         При количестве деталей на складе меньше допустимого предела - перемещается на производство,
         загружает детали и везет обратно на склад
     """
+    warehose_x = 730
+    warehose_y = 340
+    production_x = 680
+    production_y = 80
 
     def __init__(self, env):
         self.IMG_size = 50
         self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
         self.image = pygame.transform.scale(self.image,
                                             (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
-        self.x = 720  # Изначальное положение центра картинки(Склад)
-        self.y = 330
+        self.x = Truck.warehose_x  # Изначальное положение центра картинки(Склад)
+        self.y = Truck.warehose_y
         # self.x = 660  # На производстве
         # self.y = 50
         self.env = env
@@ -507,11 +534,11 @@ class Truck:
         global iteration
         global event_time, event
         self.y -= TRUCK_SPEED_Y
-        if self.y < 50:
-            self.y = 50
+        if self.y < Truck.production_y:
+            self.y = Truck.production_y
             self.x += TRUCK_SPEED_X
-            if self.x > 660:
-                self.x = 660
+            if self.x > Truck.production_x:
+                self.x = Truck.production_x
                 self.status = "on_production"
                 self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
                 self.image = pygame.transform.scale(self.image,
@@ -528,11 +555,11 @@ class Truck:
         global WAREHOSE_STATION_SIZE2
         global event, event_time
         self.x -= TRUCK_SPEED_X
-        if self.x < 600:
-            self.x = 600
+        if self.x < Truck.warehose_x:
+            self.x = Truck.warehose_x
             self.y += TRUCK_SPEED_Y
-            if self.y > 240:
-                self.y = 240
+            if self.y > Truck.warehose_y:
+                self.y = Truck.warehose_y
                 self.status = "in_warehouse"
                 self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
                 self.image = pygame.transform.scale(self.image,
