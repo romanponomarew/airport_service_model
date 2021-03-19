@@ -24,7 +24,7 @@ TOTAL_NUMBER_OF_AIRPLANES = 20
 # Define constants for the screen width and height
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 700
-SIMULATION_SPEED = 0.0005  # 0.005 - NORMAL_speed, 0.0001 - FAST_speed, 0.0000000001 - MAX_speed
+SIMULATION_SPEED = 0.0003  # 0.005 - NORMAL_speed, 0.0001 - FAST_speed, 0.0000000001 - MAX_speed
 # Airplane_Settings####################
 AIRPLANE_SPEED_X = 3
 AIRPLANE_SPEED_Y = 10
@@ -45,7 +45,7 @@ stoyanka_counts = 0  # Кол-во самолетов на стоянке
 warehouse_loaders = 0  # Кол-во команд грузчиков на складе
 
 WAREHOSE_STATION_SIZE = 150  # Максимальное(изначальное) количество деталей на складе
-THRESHOLD = 20  # Порог имеющихся деталей для заказа новых запчастей (в %)
+THRESHOLD = 40  # Порог имеющихся деталей для заказа новых запчастей (в %)
 #number_station = 2
 
 iteration = 0
@@ -68,7 +68,7 @@ class Station:
             self.y_loaders = 380
         elif self.number_of_station == 3:
             self.y = 590
-            self.y_loaders = 560  # TODO: Подобрать координату
+            self.y_loaders = 560
 
         self.station_status = 0  # Занята или свободна(самолетом)
         self.stoyanka_to_station = 0  # Находится ли какой-нибудь самолет в пути от стоянки к станции
@@ -268,17 +268,6 @@ class Airplane:
                         simulation_run = False
                         self.stopping_simulation()
 
-            # for station in stations_objects:
-            #     station_number = station.number_of_station
-            #     print("---------")
-            #     print(f"Параметры station{station_number}:")
-            #     print(f"station{station_number}.station_status=", station.station_status)  # Занята или свободна(самолетом)
-            #     print(f"station{station_number}.stoyanka_to_station=", station.stoyanka_to_station) # Находится ли какой-нибудь самолет в пути от стоянки к станции
-            #     print(f"station{station_number}.station_repair=", station.station_repair)  # Статус ремонта самолета на станции - "repair"/"ready"
-            #     print(f"station{station_number}.repairing=", station.repairing)  # Ведется ли сейчас ремонт на 1 станции? (now/done)-ожидание грузчиком и самолетом ремонта
-            #     print(f"station{station_number}.details_required=", station.details_required)  # Сколько деталей требуются для починки самолета на станции
-            #     print(f"station{station_number}.loader_to_station=", station.loader_to_station)  # Находится ли кто-то из грузчиков в пути от склада к станции
-            #     print(f"station{station_number}.loaders_count_on_station", station.loaders_count_on_station)
             yield self.env.timeout(20)
 
     def __call__(self, screen):
@@ -420,7 +409,8 @@ class Loader:
         """
         global WAREHOSE_STATION_SIZE2
         for station_object in stations_objects:
-            if WAREHOSE_STATION_SIZE2 < station_object.details_required:
+            if (WAREHOSE_STATION_SIZE2 < station_object.details_required) \
+                    or (WAREHOSE_STATION_SIZE2 < WAREHOSE_MAX * (THRESHOLD / 100)):
                 # Ждем грузовик с новыми запчастями и пополняем запас склада
                 if truck.status == "in_warehouse":
                     yield env.process(truck.to_production())
@@ -431,8 +421,6 @@ class Loader:
                         truck.loading_status = "done"
                     if truck.loading_status == "done":
                         yield env.process(truck.to_warehouse())
-                        if truck.y == 240 and truck.x == 600:
-                            WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX
 
     def return_to_warehouse(self):
         """
@@ -458,10 +446,6 @@ class Loader:
     def run(self):
         while True:
             # Станция обслуживания выбирается только один раз для каждого из самолетов
-            # if self.requesting_station:
-            #     print(f"Грузчик №{self.number}, его requesting_station={self.requesting_station.number_of_station}")
-            # else:
-            #     print(f"Грузчик №{self.number}, его requesting_station={self.requesting_station}")
             if not self.requesting_station:
                 self.requesting_station = self.checking_stations()  # Выбор свободной станции обслуживания
             station_object = self.requesting_station
@@ -509,7 +493,7 @@ class Truck:
         self.loading_status = ""  # Загружается ли сейчас грузовик? ("now"/"done")
 
     def loading(self):
-        yield self.env.timeout(1500)
+        yield self.env.timeout(4000)
 
     # TODO: Переделать траектории движений и конечные координаты склада и производств
     def to_production(self):
@@ -550,6 +534,9 @@ class Truck:
                 iteration += 1
                 event = "Грузовик на складе"
                 event_time = round(env.now / 1000)
+
+                WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX
+
         yield self.env.timeout(10)  # Для того чтобы можно было вызвать как генератор
 
     def __call__(self, screen):
