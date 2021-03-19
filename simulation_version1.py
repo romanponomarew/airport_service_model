@@ -24,11 +24,14 @@ TOTAL_NUMBER_OF_AIRPLANES = 20
 # Define constants for the screen width and height
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 700
-SIMULATION_SPEED = 0.0001  # 0.005 - NORMAL_speed, 0.0001 - FAST_speed, 0.0000000001 - MAX_speed
+SIMULATION_SPEED = 0.0005  # 0.005 - NORMAL_speed, 0.0001 - FAST_speed, 0.0000000001 - MAX_speed
 # Airplane_Settings####################
 AIRPLANE_SPEED_X = 3
 AIRPLANE_SPEED_Y = 10
 # Loader_Settings######################
+# SEARCHING_TECHNOLOGY = random.randint(150, 300)  # Среднее время поиска 1 детали на складе(стандартные технологии)
+SEARCHING_TECHNOLOGY = random.randint(33, 67)  # Среднее время поиска 1 детали на складе(технологии IoT)
+REPAIR_TIME = random.randint(1200, 2000)  # Среднее время ремонта на станции тех.обслуживания
 LOADER_SPEED_X = 3
 LOADER_SPEED_Y = 2
 NUMBER_OF_LOADERS = 3
@@ -41,13 +44,14 @@ TRUCK_SPEED_Y = 3
 stoyanka_counts = 0  # Кол-во самолетов на стоянке
 warehouse_loaders = 0  # Кол-во команд грузчиков на складе
 
-WAREHOSE_STATION_SIZE = 50  # Максимальное(изначальное) количество деталей на складе
+WAREHOSE_STATION_SIZE = 150  # Максимальное(изначальное) количество деталей на складе
 THRESHOLD = 20  # Порог имеющихся деталей для заказа новых запчастей (в %)
-number_station = 2
+#number_station = 2
 
 iteration = 0
-WAREHOSE_MAX = 50
-WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX  # Максимальное(изначальное) количество деталей на складе
+WAREHOSE_MAX = 150
+WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX   # Максимальное(изначальное) количество деталей на складе
+
 
 
 class Station:
@@ -285,22 +289,20 @@ class Airplane:
 
 class Loader:
     """Команда грузчиков"""
-    warehose_x = 740
+    warehouse_x = 740
+    warehouse_y = 380  # station2.y_loaders
     def __init__(self, env, number):
         self.number = number
         self.IMG_size = 40
         self.image = pygame.image.load("loader.png")  # Загрузка в pygame картинки
         self.image = pygame.transform.scale(self.image, (self.IMG_size, self.IMG_size))  # Изменение размера картинки
-        self.x = Loader.warehose_x  # Изначальное положение центра картинки(На складе)
-        self.y = station2.y_loaders
+        self.x = Loader.warehouse_x  # Изначальное положение центра картинки(На складе)
+        self.y = Loader.warehouse_y
         self.env = env
         self.status_now = ""  # "on_parking", "on_service_station", "moving"
         self.status = "in_warehouse"  # "on_service_station", "moving"
-        self.repair_time = random.randint(1200, 2000)  # Среднее время ремонта на станции тех.обслуживания
-
-        # self.search_time = random.randint(150, 300)  # Среднее время поиска 1 детали на складе(стандартные технологии)
-        self.search_time = random.randint(33, 67)  # Среднее время поиска 1 детали на складе(технологии IoT)
-
+        self.repair_time = REPAIR_TIME  # Среднее время ремонта на станции тех.обслуживания
+        self.search_time = SEARCHING_TECHNOLOGY  # Среднее время поиска 1 детали на складе
         self.search_status = "search"
         self.warehose_status = "empty"  # "empty", "full"
         self.loader_details = 0  # Запчасти которые несет с собой грузчик от склада к станции
@@ -314,7 +316,7 @@ class Loader:
         """
         number_of_station = requesting_station.number_of_station
 
-        if self.x > 570:
+        if self.x > 570:  # Промежуточная точка
             self.x -= LOADER_SPEED_X
 
         if self.y == requesting_station.y_loaders and self.x > requesting_station.x_loaders:  # requesting_station == 2
@@ -342,47 +344,28 @@ class Loader:
     def to_warehouse(self):
         """Перемещение грузчиков от станции тех.обслуживания к складу"""
         global warehouse_loaders
-        self.x += LOADER_SPEED_X
-        if self.x > 450 and self.y != 380:
-            self.x = 450
-            # От станции тех.обслуживания
-            self.y += LOADER_SPEED_Y
-            if self.y > 380:
-                self.y = 380
-        if self.y == 380:
+        if self.x < 570:  # Промежуточная точка
             self.x += LOADER_SPEED_X
-            if self.x > Loader.warehose_x:
-                self.x = Loader.warehose_x
-                self.status = "in_warehouse"
-                self.search_status = "search"
-                self.image = pygame.image.load("loader.png")  # Загрузка в pygame картинки
-                self.image = pygame.transform.scale(self.image,
-                                                    (self.IMG_size, self.IMG_size))  # Изменение размера картинки
-                warehouse_loaders += 1
-                self.warehose_status = "empty"
 
-    # def to_warehouse(self, station):
-    #     # TODO:
-    #     """Перемещение грузчиков от станции тех.обслуживания к складу"""
-    #     global warehouse_loaders
-    #     self.x += LOADER_SPEED_X
-    #     if self.x > station.x_loaders and self.y != station.y_loaders:
-    #         self.x = station.x_loaders
-    #         # От станции тех.обслуживания
-    #         self.y += LOADER_SPEED_Y
-    #         if self.y > station.y_loaders:
-    #             self.y = station.y_loaders
-    #     if self.y == station.y_loaders:
-    #         self.x += LOADER_SPEED_X
-    #         if self.x > Loader.warehose_x:
-    #             self.x = Loader.warehose_x
-    #             self.status = "in_warehouse"
-    #             self.search_status = "search"
-    #             self.image = pygame.image.load("loader.png")  # Загрузка в pygame картинки
-    #             self.image = pygame.transform.scale(self.image,
-    #                                                 (self.IMG_size, self.IMG_size))  # Изменение размера картинки
-    #             warehouse_loaders += 1
-    #             self.warehose_status = "empty"
+        if self.x < Loader.warehouse_x:
+            if self.y == Loader.warehouse_y:
+                self.x += LOADER_SPEED_X
+            elif self.y < Loader.warehouse_y:
+                self.y += LOADER_SPEED_Y
+                self.x += LOADER_SPEED_X
+            elif self.y > Loader.warehouse_y:
+                self.y -= LOADER_SPEED_Y
+                self.x += LOADER_SPEED_X
+
+        if self.x >= Loader.warehouse_x:
+            self.x = Loader.warehouse_x
+            self.status = "in_warehouse"
+            self.search_status = "search"
+            self.image = pygame.image.load("loader.png")  # Загрузка в pygame картинки
+            self.image = pygame.transform.scale(self.image,
+                                                (self.IMG_size, self.IMG_size))  # Изменение размера картинки
+            warehouse_loaders += 1
+            self.warehose_status = "empty"
 
     def checking_stations(self):
         """
@@ -670,8 +653,8 @@ for mechanic in mechanics:
 truck = Truck(env)
 renderer.add(truck)
 
-service_station = simpy.Resource(env, number_station)  # Общий ресурс - станции обслуживания
-warehose = simpy.Container(env, WAREHOSE_STATION_SIZE, init=WAREHOSE_STATION_SIZE)  # Склад(контейнер) - механики /
+#service_station = simpy.Resource(env, number_station)  # Общий ресурс - станции обслуживания
+#warehose = simpy.Container(env, WAREHOSE_STATION_SIZE, init=WAREHOSE_STATION_SIZE)  # Склад(контейнер) - механики /
 # забирают/ детали, грузовик привозит новые
 
 env.process(airplane_generator(env, airplanes))
