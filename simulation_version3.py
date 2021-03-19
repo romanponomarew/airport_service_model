@@ -5,6 +5,8 @@
     .4 внешних склада(небольшие) - принадлежат другим АТБ
     .2 грузовика на каждом из складов(1 - для пополнения запасов с производства,
         1 - для взятия деталей с внешних складов)
+    # TODO: Либо 1 грузовик на каждом складе. При суммарном недостатке деталей,
+            любой из свободных грузовиков едет на производство
 
     .Поиск деталей на складе и оформление заказа с помощью
         технологий интернета вещей - всегда известно сколько и каких деталей есть на каждом из складов
@@ -54,18 +56,18 @@ WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX  # Максимальное(изначал
 class Station:
     def __init__(self, number_of_station):
         self.number_of_station = number_of_station
-        self.x = 355
+        self.x = 365
         self.x_loaders = 450
 
         if self.number_of_station == 1:
-            self.y = 265
-            self.y_loaders = 230
-        elif self.number_of_station == 2:
             self.y = 420
-            self.y_loaders = 380
+            self.y_loaders = self.y - 40
+        elif self.number_of_station == 2:
+            self.y = 545
+            self.y_loaders = 500
         elif self.number_of_station == 3:
-            self.y = 590
-            self.y_loaders = 560
+            self.y = 670
+            self.y_loaders = self.y - 30
 
         self.station_status = 0  # Занята или свободна(самолетом)
         self.stoyanka_to_station = 0  # Находится ли какой-нибудь самолет в пути от стоянки к станции
@@ -123,7 +125,8 @@ class Airplane:
 
     def arriving(self):
         """Прибытие самолета в аэропорт и перемещение на стоянку"""
-        current_y_stoyanka = SCREEN_HEIGHT - 95  # Текущая координата Y для стоянки
+        current_y_stoyanka = SCREEN_HEIGHT - 110  # Текущая координата Y для стоянки
+        stoyanka_x = 100
         global stoyanka_counts
         global event, event_time
         # Движение по вертикали(Конечная координата зависит от того, сколько самолетов уже на стоянке):
@@ -133,8 +136,8 @@ class Airplane:
             # Движение по горизонтиали:
             self.x += 10
             # Удержание игрока в рамках окна
-            if self.x > 95:
-                self.x = 95
+            if self.x > stoyanka_x:
+                self.x = stoyanka_x
                 self.status = "on_parking"
         # Увеличиваем количество самолетов на стоянке
         if self.status == "on_parking":
@@ -200,13 +203,13 @@ class Airplane:
         """Самолеты покидают аэропорт со станций обслуживания"""
         # Движение по горизонтиали:
         self.x += 2
-        if self.x > 450 and self.y != 600:
+        if self.x > 450 and self.y != 650:
             self.x = 450
             # Движение по вертикали(до станции обслуживания №1):
             self.y += 3
-            if self.y > 600:
-                self.y = 600
-        if self.x == 450 and self.y == 600:
+            if self.y > 650:
+                self.y = 650
+        if self.x == 450 and self.y == 650:
             self.x += 3
 
     def stopping_simulation(self):
@@ -275,8 +278,8 @@ class Airplane:
 
 class Loader:
     """Команда грузчиков"""
-    warehouse_x = 740
-    warehouse_y = 380  # station2.y_loaders
+    warehouse_x = 660
+    warehouse_y = 500  # station2.y_loaders
 
     def __init__(self, env, number):
         self.number = number
@@ -410,15 +413,15 @@ class Loader:
             if (WAREHOSE_STATION_SIZE2 < station_object.details_required) \
                     or (WAREHOSE_STATION_SIZE2 < WAREHOSE_MAX * (THRESHOLD / 100)):
                 # Ждем грузовик с новыми запчастями и пополняем запас склада
-                if truck.status == "in_warehouse":
-                    yield env.process(truck.to_production())
+                if truck_local1.status == "in_warehouse":
+                    yield env.process(truck_local1.to_production())
                 # Грузовик находится на производстве:
-                if truck.status == "on_production":
-                    if truck.loading_status == "now":
-                        yield env.process(truck.loading())
-                        truck.loading_status = "done"
-                    if truck.loading_status == "done":
-                        yield env.process(truck.to_warehouse())
+                if truck_local1.status == "on_production":
+                    if truck_local1.loading_status == "now":
+                        yield env.process(truck_local1.loading())
+                        truck_local1.loading_status = "done"
+                    if truck_local1.loading_status == "done":
+                        yield env.process(truck_local1.to_warehouse())
 
     def return_to_warehouse(self):
         """
@@ -470,16 +473,18 @@ class Truck:
         При количестве деталей на складе меньше допустимого предела - перемещается на производство,
         загружает детали и везет обратно на склад
     """
-    warehose_x = 730
-    warehose_y = 340
+    warehose_x = 680
+    warehose_y = 410
     production_x = 680
-    production_y = 80
+    production_y = 230
 
-    def __init__(self, env):
+    def __init__(self, env, warehouse_number):
         self.IMG_size = 50
         self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
         self.image = pygame.transform.scale(self.image,
                                             (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
+        self.warehouse_number = warehouse_number  # 0, 1, 2, 3, 4 (Если №0 - локальный склад, АТБ)
+
         self.x = Truck.warehose_x  # Изначальное положение центра картинки(Склад)
         self.y = Truck.warehose_y
         # self.x = 660  # На производстве
@@ -567,33 +572,33 @@ class Monitoring:
         details_required_text = "Требуется деталей:"
 
         # ################### Отображение кол-ва самолетов на стоянке: ###################
-        self.parameter_displaying(text=airplanes_counts_text, parameter=stoyanka_counts, x=10, y=230)
+        self.parameter_displaying(text=airplanes_counts_text, parameter=stoyanka_counts, x=55, y=300)
 
         for station in stations_objects:
             # ################### Отображение кол-ва самолетов на станции тех.обслуживания: ###################
             text_x = station.x - 45
             text_y = station.y - 65
-            self.parameter_displaying(text=airplanes_counts_text, parameter=station.station_status, x=text_x,
-                                      y=text_y - 15)
+            # self.parameter_displaying(text=airplanes_counts_text, parameter=station.station_status, x=text_x,
+            #                           y=text_y - 15)
             # ################### Отображение кол-ва деталей на станции тех.обслуживания: ###################
             self.parameter_displaying(text=details_required_text, parameter=station.details_required, x=text_x,
-                                      y=text_y - 30)
+                                      y=text_y - 15)
             # ################### Отображение кол-ва команд механиков на станции тех.обслуживания: ###################
             self.parameter_displaying(text=loaders_counts_text, parameter=station.loaders_count_on_station, x=text_x,
                                       y=text_y)
 
         # ################### Отображение кол-ва команд грузчиков на складе: ###################
-        self.parameter_displaying(text=loaders_counts_text, parameter=warehouse_loaders, x=778, y=300)
+        self.parameter_displaying(text=loaders_counts_text, parameter=warehouse_loaders, x=810, y=430, indent=-20)
         # ################### Отображение кол-ва деталей на складе(2): ###################
-        self.parameter_displaying(text="Кол-во деталей на складе:", parameter=WAREHOSE_STATION_SIZE2, x=778, y=325,
-                                  indent=50)
+        self.parameter_displaying(text="Кол-во деталей на складе:", parameter=WAREHOSE_STATION_SIZE2, x=810, y=445,
+                                  indent=35)
         # From Monitoring1(Для отладки)
         # Отображение события:
-        self.parameter_displaying(text="Событие:", parameter=event, x=550, y=440, indent=-50)
+        self.parameter_displaying(text="Событие:", parameter=event, x=710, y=570, indent=-5)
         # Время события:
-        self.parameter_displaying(text="Время:", parameter=event_time, x=550, y=470, indent=-70)
+        self.parameter_displaying(text="Время события:", parameter=event_time, x=710, y=590, indent=-30)
         # Время в симуляции:
-        self.parameter_displaying(text="Время симуляции:", parameter=round(env.now / 1000), x=550, y=620)
+        self.parameter_displaying(text="Время симуляции:", parameter=round(env.now / 1000), x=710, y=620)
 
 
 ###########################################################
@@ -634,8 +639,8 @@ for mechanic in mechanics:
     renderer.add(mechanic)
     env.process(mechanic.run())
 
-truck = Truck(env)
-renderer.add(truck)
+truck_local1 = Truck(env, warehouse_number=0)
+renderer.add(truck_local1)
 
 # service_station = simpy.Resource(env, number_station)  # Общий ресурс - станции обслуживания
 # warehose = simpy.Container(env, WAREHOSE_STATION_SIZE, init=WAREHOSE_STATION_SIZE)  # Склад(контейнер) - механики /
