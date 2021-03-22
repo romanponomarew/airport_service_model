@@ -414,7 +414,7 @@ class Loader:
                     or (WAREHOSE_STATION_SIZE2 < WAREHOSE_MAX * (THRESHOLD / 100)):
                 # Ждем грузовик с новыми запчастями и пополняем запас склада
                 if truck_local1.status == "in_warehouse":
-                    yield env.process(truck_local1.to_production())
+                    yield env.process(truck_local1.to_other_warehouse())
                 # Грузовик находится на производстве:
                 if truck_local1.status == "on_production":
                     if truck_local1.loading_status == "now":
@@ -501,7 +501,7 @@ class Truck:
     def loading(self):
         yield self.env.timeout(4000)
 
-    def to_production(self):
+    def to_other_warehouse(self):
         """Перемещение грузовика от склада к производству/заводу"""
         global event_time, event
         self.y -= TRUCK_SPEED_Y
@@ -562,6 +562,36 @@ class TruckLocal(Truck):
         self.y = self.warehose_y
 
 
+class TruckOutside(Truck):
+    """
+    Грузовик:
+        При количестве деталей на складе меньше допустимого предела - перемещается на производство,
+        загружает детали и везет обратно на склад
+    """
+
+    def __init__(self, env, warehouse_number):
+        super().__init__(env)
+        if warehouse_number == 1:
+            self.production_x = 280  # Координаты внешнего склада
+            self.production_y = 50
+            self.warehose_x = 250  # Координаты склада
+        elif warehouse_number == 2:
+            self.production_x = 680  # Координаты внешнего склада
+            self.production_y = 230
+            self.warehose_x = 470  # Координаты склада
+        elif warehouse_number == 3:
+            self.production_x = 680  # Координаты внешнего склада
+            self.production_y = 230
+            self.warehose_x = 670  # Координаты склада
+        elif warehouse_number == 4:
+            self.production_x = 680  # Координаты внешнего склада
+            self.production_y = 230
+            self.warehose_x = 900  # Координаты склада
+        self.warehose_y = 160
+        self.x = self.warehose_x  # Изначальное положение центра картинки(Склад)
+        self.y = self.warehose_y
+
+
 class Monitoring:
     """Класс для отображения текста и состояния переменных"""
 
@@ -603,11 +633,17 @@ class Monitoring:
             self.parameter_displaying(text=loaders_counts_text, parameter=station.loaders_count_on_station, x=text_x,
                                       y=text_y)
 
-        # ################### Отображение кол-ва команд грузчиков на складе: ###################
+        # ################### Отображение кол-ва команд грузчиков на локальном складе: ###################
         self.parameter_displaying(text=loaders_counts_text, parameter=warehouse_loaders, x=810, y=430, indent=-20)
-        # ################### Отображение кол-ва деталей на складе(2): ###################
+        # ################### Отображение кол-ва деталей на локальном складе: ###################
         self.parameter_displaying(text="Кол-во деталей на складе:", parameter=WAREHOSE_STATION_SIZE2, x=810, y=445,
                                   indent=35)
+
+        # ################### Отображение кол-ва деталей на внешних складах: ###################
+        details_x_list = [230, 450, 650, 865]
+        for details_x in details_x_list:
+            self.parameter_displaying(text="Детали:", parameter=WAREHOSE_STATION_SIZE2, x=details_x, y=210, indent=-70)
+
         # From Monitoring1(Для отладки)
         # Отображение события:
         self.parameter_displaying(text="Событие:", parameter=event, x=710, y=570, indent=-5)
@@ -615,6 +651,8 @@ class Monitoring:
         self.parameter_displaying(text="Время события:", parameter=event_time, x=710, y=590, indent=-30)
         # Время в симуляции:
         self.parameter_displaying(text="Время симуляции:", parameter=round(env.now / 1000), x=710, y=620)
+
+
 
 
 ###########################################################
@@ -657,6 +695,16 @@ for mechanic in mechanics:
 
 truck_local1 = TruckLocal(env)
 renderer.add(truck_local1)
+
+truck_outside1 = TruckOutside(env, warehouse_number=1)
+renderer.add(truck_outside1)
+truck_outside2 = TruckOutside(env, warehouse_number=2)
+renderer.add(truck_outside2)
+truck_outside3 = TruckOutside(env, warehouse_number=3)
+renderer.add(truck_outside3)
+truck_outside4 = TruckOutside(env, warehouse_number=4)
+renderer.add(truck_outside4)
+
 
 # service_station = simpy.Resource(env, number_station)  # Общий ресурс - станции обслуживания
 # warehose = simpy.Container(env, WAREHOSE_STATION_SIZE, init=WAREHOSE_STATION_SIZE)  # Склад(контейнер) - механики /
