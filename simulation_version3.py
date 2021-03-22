@@ -470,31 +470,96 @@ class Loader:
 class Truck:
     """
     Грузовик:
-        При количестве деталей на складе меньше допустимого предела - перемещается на производство,
-        загружает детали и везет обратно на склад
+        Базовый класс двух видов грузовиков:
+         1.Грузовик локального склада
+         2.Грузовик внешнего склада
     """
-    # production_x = 680
-    # production_y = 230
 
-    def __init__(self, env, warehouse_number):
+    def __init__(self, env):
         self.IMG_size = 50
         self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
         self.image = pygame.transform.scale(self.image,
                                             (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
-        self.warehouse_number = warehouse_number  # 0, 1, 2, 3, 4 (Если №0 - локальный склад, АТБ)
+        self.env = env
+        self.status_prev = ""  # "on_parking", "on_service_station", "moving"
+        self.status = "in_warehouse"  # "on_production"
+        self.loading_status = ""  # Загружается ли сейчас грузовик? ("now"/"done")
 
+        # self.warehouse_number = warehouse_number  # 0, 1, 2, 3, 4 (Если №0 - локальный склад, АТБ)
+
+        # self.production_x = 680  # Координаты внешнего склада
+        # self.production_y = 230
+        # self.warehose_x = 680  # Координаты склада
+        # self.warehose_y = 410
+        # self.x = self.warehose_x  # Изначальное положение центра картинки(Склад)
+        # self.y = self.warehose_y
+
+    # def loading(self):
+    #     yield self.env.timeout(4000)
+    #
+    # def to_production(self):
+    #     """Перемещение грузовика от склада к производству/заводу"""
+    #     global iteration
+    #     global event_time, event
+    #     self.y -= TRUCK_SPEED_Y
+    #     if self.y < truck_local1.production_y:
+    #         self.y = truck_local1.production_y
+    #         self.x += TRUCK_SPEED_X
+    #         if self.x > truck_local1.production_x:
+    #             self.x = truck_local1.production_x
+    #             self.status = "on_production"
+    #             self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
+    #             self.image = pygame.transform.scale(self.image,
+    #                                                 (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
+    #             iteration += 1
+    #             self.loading_status = "now"
+    #             event = "Грузовик на заводе"
+    #             event_time = round(env.now / 1000)
+    #     yield self.env.timeout(10)  # # Для того чтобы можно было вызвать как генератор
+    #
+    # def to_warehouse(self):
+    #     """Перемещение грузовика от завода к складу"""
+    #     global iteration
+    #     global WAREHOSE_STATION_SIZE2
+    #     global event, event_time
+    #     self.x -= TRUCK_SPEED_X
+    #     if self.x < truck_local1.warehose_x:
+    #         self.x = truck_local1.warehose_x
+    #         self.y += TRUCK_SPEED_Y
+    #         if self.y > truck_local1.warehose_y:
+    #             self.y = truck_local1.warehose_y
+    #             self.status = "in_warehouse"
+    #             self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
+    #             self.image = pygame.transform.scale(self.image,
+    #                                                 (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
+    #             iteration += 1
+    #             event = "Грузовик на складе"
+    #             event_time = round(env.now / 1000)
+    #
+    #             WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX
+    #
+    #     yield self.env.timeout(10)  # Для того чтобы можно было вызвать как генератор
+    #
+    # def __call__(self, screen):
+    #     self.image1 = self.image.get_rect(topleft=(self.x, self.y))
+    #     screen.blit(self.image, self.image1)  # Расположить картинку по координатам
+
+
+class TruckLocal(Truck):
+    """
+    Грузовик:
+        При количестве деталей на складе меньше допустимого предела - перемещается на производство,
+        загружает детали и везет обратно на склад
+    """
+
+    def __init__(self, env):
+        super().__init__(env)
         self.production_x = 680  # Координаты внешнего склада
         self.production_y = 230
         self.warehose_x = 680  # Координаты склада
         self.warehose_y = 410
         self.x = self.warehose_x  # Изначальное положение центра картинки(Склад)
         self.y = self.warehose_y
-
-        self.env = env
-        self.status_prev = ""  # "on_parking", "on_service_station", "moving"
-        self.status = "in_warehouse"  # "on_production"
-        # self.status = "on_production"
-        self.loading_status = ""  # Загружается ли сейчас грузовик? ("now"/"done")
 
     def loading(self):
         yield self.env.timeout(4000)
@@ -640,7 +705,7 @@ for mechanic in mechanics:
     renderer.add(mechanic)
     env.process(mechanic.run())
 
-truck_local1 = Truck(env, warehouse_number=0)
+truck_local1 = TruckLocal(env)
 renderer.add(truck_local1)
 
 # service_station = simpy.Resource(env, number_station)  # Общий ресурс - станции обслуживания
