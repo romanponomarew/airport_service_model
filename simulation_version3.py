@@ -49,7 +49,7 @@ WAREHOSE_STATION_SIZE = 150  # Максимальное(изначальное) 
 THRESHOLD = 40  # Порог имеющихся деталей для заказа новых запчастей (в %)
 
 iteration = 0
-WAREHOSE_MAX = 150
+WAREHOSE_MAX = 100
 WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX  # Максимальное(изначальное) количество деталей на складе
 
 
@@ -476,6 +476,10 @@ class Truck:
     """
 
     def __init__(self, env):
+        self.warehose_y = None
+        self.production_x = None
+        self.production_y = None
+        self.warehose_x = None
         self.IMG_size = 50
         self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
         self.image = pygame.transform.scale(self.image,
@@ -494,55 +498,51 @@ class Truck:
         # self.x = self.warehose_x  # Изначальное положение центра картинки(Склад)
         # self.y = self.warehose_y
 
-    # def loading(self):
-    #     yield self.env.timeout(4000)
-    #
-    # def to_production(self):
-    #     """Перемещение грузовика от склада к производству/заводу"""
-    #     global iteration
-    #     global event_time, event
-    #     self.y -= TRUCK_SPEED_Y
-    #     if self.y < truck_local1.production_y:
-    #         self.y = truck_local1.production_y
-    #         self.x += TRUCK_SPEED_X
-    #         if self.x > truck_local1.production_x:
-    #             self.x = truck_local1.production_x
-    #             self.status = "on_production"
-    #             self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
-    #             self.image = pygame.transform.scale(self.image,
-    #                                                 (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
-    #             iteration += 1
-    #             self.loading_status = "now"
-    #             event = "Грузовик на заводе"
-    #             event_time = round(env.now / 1000)
-    #     yield self.env.timeout(10)  # # Для того чтобы можно было вызвать как генератор
-    #
-    # def to_warehouse(self):
-    #     """Перемещение грузовика от завода к складу"""
-    #     global iteration
-    #     global WAREHOSE_STATION_SIZE2
-    #     global event, event_time
-    #     self.x -= TRUCK_SPEED_X
-    #     if self.x < truck_local1.warehose_x:
-    #         self.x = truck_local1.warehose_x
-    #         self.y += TRUCK_SPEED_Y
-    #         if self.y > truck_local1.warehose_y:
-    #             self.y = truck_local1.warehose_y
-    #             self.status = "in_warehouse"
-    #             self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
-    #             self.image = pygame.transform.scale(self.image,
-    #                                                 (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
-    #             iteration += 1
-    #             event = "Грузовик на складе"
-    #             event_time = round(env.now / 1000)
-    #
-    #             WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX
-    #
-    #     yield self.env.timeout(10)  # Для того чтобы можно было вызвать как генератор
-    #
-    # def __call__(self, screen):
-    #     self.image1 = self.image.get_rect(topleft=(self.x, self.y))
-    #     screen.blit(self.image, self.image1)  # Расположить картинку по координатам
+    def loading(self):
+        yield self.env.timeout(4000)
+
+    def to_production(self):
+        """Перемещение грузовика от склада к производству/заводу"""
+        global event_time, event
+        self.y -= TRUCK_SPEED_Y
+        if self.y < self.production_y:
+            self.y = self.production_y
+            self.x += TRUCK_SPEED_X
+            if self.x > self.production_x:
+                self.x = self.production_x
+                self.status = "on_production"
+                self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
+                self.image = pygame.transform.scale(self.image,
+                                                    (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
+                self.loading_status = "now"
+                event = "Грузовик на заводе"
+                event_time = round(env.now / 1000)
+        yield self.env.timeout(10)  # # Для того чтобы можно было вызвать как генератор
+
+    def to_warehouse(self):
+        """Перемещение грузовика от завода к складу"""
+        global WAREHOSE_STATION_SIZE2
+        global event, event_time
+        self.x -= TRUCK_SPEED_X
+        if self.x < self.warehose_x:
+            self.x = self.warehose_x
+            self.y += TRUCK_SPEED_Y
+            if self.y > self.warehose_y:
+                self.y = self.warehose_y
+                self.status = "in_warehouse"
+                self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
+                self.image = pygame.transform.scale(self.image,
+                                                    (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
+                event = "Грузовик на складе"
+                event_time = round(env.now / 1000)
+
+                WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX
+
+        yield self.env.timeout(10)  # Для того чтобы можно было вызвать как генератор
+
+    def __call__(self, screen):
+        self.image1 = self.image.get_rect(topleft=(self.x, self.y))
+        screen.blit(self.image, self.image1)  # Расположить картинку по координатам
 
 
 class TruckLocal(Truck):
@@ -560,56 +560,6 @@ class TruckLocal(Truck):
         self.warehose_y = 410
         self.x = self.warehose_x  # Изначальное положение центра картинки(Склад)
         self.y = self.warehose_y
-
-    def loading(self):
-        yield self.env.timeout(4000)
-
-    def to_production(self):
-        """Перемещение грузовика от склада к производству/заводу"""
-        global iteration
-        global event_time, event
-        self.y -= TRUCK_SPEED_Y
-        if self.y < truck_local1.production_y:
-            self.y = truck_local1.production_y
-            self.x += TRUCK_SPEED_X
-            if self.x > truck_local1.production_x:
-                self.x = truck_local1.production_x
-                self.status = "on_production"
-                self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
-                self.image = pygame.transform.scale(self.image,
-                                                    (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
-                iteration += 1
-                self.loading_status = "now"
-                event = "Грузовик на заводе"
-                event_time = round(env.now / 1000)
-        yield self.env.timeout(10)  # # Для того чтобы можно было вызвать как генератор
-
-    def to_warehouse(self):
-        """Перемещение грузовика от завода к складу"""
-        global iteration
-        global WAREHOSE_STATION_SIZE2
-        global event, event_time
-        self.x -= TRUCK_SPEED_X
-        if self.x < truck_local1.warehose_x:
-            self.x = truck_local1.warehose_x
-            self.y += TRUCK_SPEED_Y
-            if self.y > truck_local1.warehose_y:
-                self.y = truck_local1.warehose_y
-                self.status = "in_warehouse"
-                self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
-                self.image = pygame.transform.scale(self.image,
-                                                    (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
-                iteration += 1
-                event = "Грузовик на складе"
-                event_time = round(env.now / 1000)
-
-                WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX
-
-        yield self.env.timeout(10)  # Для того чтобы можно было вызвать как генератор
-
-    def __call__(self, screen):
-        self.image1 = self.image.get_rect(topleft=(self.x, self.y))
-        screen.blit(self.image, self.image1)  # Расположить картинку по координатам
 
 
 class Monitoring:
