@@ -402,26 +402,6 @@ class Loader:
             self.loader_details = details_required
             self.warehose_status = "full"
 
-    @staticmethod
-    def ordering_new_details():
-        """
-        Грузчики ищут на складе нужные для ремонта детали.
-        Если деталей недостаточно, они сообщают грузовику отправится на производство за новыми запчастями
-        """
-        global WAREHOSE_STATION_SIZE2
-        for station_object in stations_objects:
-            if (WAREHOSE_STATION_SIZE2 < station_object.details_required) \
-                    or (WAREHOSE_STATION_SIZE2 < WAREHOSE_MAX * (THRESHOLD / 100)):
-                # Ждем грузовик с новыми запчастями и пополняем запас склада
-                if truck_local1.status == "in_warehouse":
-                    yield env.process(truck_local1.to_other_warehouse())
-                # Грузовик находится на производстве:
-                if truck_local1.status == "on_production":
-                    if truck_local1.loading_status == "now":
-                        yield env.process(truck_local1.loading())
-                        truck_local1.loading_status = "done"
-                    if truck_local1.loading_status == "done":
-                        yield env.process(truck_local1.to_local_warehouse())
 
     def return_to_warehouse(self):
         """
@@ -456,7 +436,10 @@ class Loader:
                 yield from self.departure_from_warehouse_to_station(WAREHOSE_STATION_SIZE2, station_object)
 
             # Говорим грузовику отпрваится на склад за новыми запчастями:
-            yield from self.ordering_new_details()
+            for station_object in stations_objects:
+                if (WAREHOSE_STATION_SIZE2 < station_object.details_required) \
+                        or (WAREHOSE_STATION_SIZE2 < WAREHOSE_MAX * (THRESHOLD / 100)):
+                    yield from ordering_new_details(truck_object=truck_local1)
 
             # Отправление грузчика при завершении ремонта со станции обратно на склад:
             yield from self.return_to_warehouse()
@@ -503,8 +486,8 @@ class Truck:
         yield self.env.timeout(4000)
 
     def _selecting_other_warehouse(self):
-        # random_warehouse_number = random.choice(self.neighbors)
-        random_warehouse_number = 4
+        random_warehouse_number = random.choice(self.neighbors)
+        # random_warehouse_number = 4
         print(self.neighbors)
         print(random_warehouse_number)
         for other_warehouse in trucks:
@@ -608,6 +591,10 @@ class TruckOutside(Truck):
         # TODO: 1)Придумать изменение деталей на складе
         #       2)Придумать куда перемещатся за деталями и при каком случае отправляться на производство
 
+    def run(self):
+        while True:
+            yield from ordering_new_details(truck_object=self)
+            yield self.env.timeout(50)
 
 class Monitoring:
     """Класс для отображения текста и состояния переменных"""
@@ -705,6 +692,22 @@ def moving_from_point1_to_point2(point1_x, point1_y, point2_x, point2_y):
     return point1_x, point1_y
 
 
+def ordering_new_details(truck_object):
+    """
+    Грузчики ищут на складе нужные для ремонта детали.
+    Если деталей недостаточно, они сообщают грузовику отправится на производство за новыми запчастями
+    """
+    global WAREHOSE_STATION_SIZE2
+    # Ждем грузовик с новыми запчастями и пополняем запас склада
+    if truck_object.status == "in_warehouse":
+        yield env.process(truck_object.to_other_warehouse())
+    # Грузовик находится на производстве:
+    if truck_object.status == "on_production":
+        if truck_object.loading_status == "now":
+            yield env.process(truck_object.loading())
+            truck_object.loading_status = "done"
+        if truck_object.loading_status == "done":
+            yield env.process(truck_object.to_local_warehouse())
 ###########################################################
 
 
@@ -738,6 +741,7 @@ renderer.add(truck_local1)
 outside_trucks = [TruckOutside(env, warehouse_number=i) for i in range(1, 5)]
 for truck in outside_trucks:
     renderer.add(truck)
+    env.process(truck.run())
 
 trucks = outside_trucks.copy()
 trucks.append(truck_local1)
