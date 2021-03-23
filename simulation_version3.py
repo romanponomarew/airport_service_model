@@ -21,7 +21,7 @@ import random
 import json
 
 AIRPLANE_ARRIVING_TIME = [3000, 7000]  # Прибытие самолета каждые [min, max] секунд
-TOTAL_NUMBER_OF_AIRPLANES = 20
+TOTAL_NUMBER_OF_AIRPLANES = 40
 # Define constants for the screen width and height
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 780
@@ -49,7 +49,7 @@ WAREHOSE_STATION_SIZE = 150  # Максимальное(изначальное) 
 THRESHOLD = 40  # Порог имеющихся деталей для заказа новых запчастей (в %)
 
 iteration = 0
-WAREHOSE_MAX = 100
+WAREHOSE_MAX = 70
 WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX  # Максимальное(изначальное) количество деталей на складе
 
 
@@ -502,42 +502,56 @@ class Truck:
     def loading(self):
         yield self.env.timeout(4000)
 
+    def _selecting_other_warehouse(self):
+        # random_warehouse_number = random.choice(self.neighbors)
+        random_warehouse_number = 4
+        print(self.neighbors)
+        print(random_warehouse_number)
+        for other_warehouse in trucks:
+            # random_warehouse_number = random.choice(self.neighbors)
+            if other_warehouse.warehouse_number == random_warehouse_number:
+                self.production_x = other_warehouse.warehose_x
+                self.production_y = other_warehouse.warehose_y
+
     def to_other_warehouse(self):
         """Перемещение грузовика от склада к производству/заводу"""
         global event_time, event
-        self.y -= TRUCK_SPEED_Y
-        if self.y < self.production_y:
-            self.y = self.production_y
-            self.x += TRUCK_SPEED_X
-            if self.x > self.production_x:
-                self.x = self.production_x
-                self.status = "on_production"
-                self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
-                self.image = pygame.transform.scale(self.image,
-                                                    (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
-                self.loading_status = "now"
-                event = "Грузовик на заводе"
-                event_time = round(env.now / 1000)
+        self._selecting_other_warehouse()
+        self.x, self.y = moving_from_point1_to_point2(
+            point1_x=self.x,
+            point1_y=self.y,
+            point2_x=self.production_x,
+            point2_y=self.production_y)
+
+        if self.x == self.production_x and self.y == self.production_y:
+            self.status = "on_production"
+            self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
+            self.image = pygame.transform.scale(self.image,
+                                                (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
+            self.loading_status = "now"
+            event = "Грузовик на заводе"
+            event_time = round(env.now / 1000)
+
         yield self.env.timeout(10)  # # Для того чтобы можно было вызвать как генератор
 
     def to_local_warehouse(self):
         """Перемещение грузовика от завода к складу"""
         global WAREHOSE_STATION_SIZE2
         global event, event_time
-        self.x -= TRUCK_SPEED_X
-        if self.x < self.warehose_x:
-            self.x = self.warehose_x
-            self.y += TRUCK_SPEED_Y
-            if self.y > self.warehose_y:
-                self.y = self.warehose_y
-                self.status = "in_warehouse"
-                self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
-                self.image = pygame.transform.scale(self.image,
-                                                    (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
-                event = "Грузовик на складе"
-                event_time = round(env.now / 1000)
+        self.x, self.y = moving_from_point1_to_point2(
+            point1_x=self.x,
+            point1_y=self.y,
+            point2_x=self.warehose_x,
+            point2_y=self.warehose_y)
 
-                WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX
+        if self.x == self.warehose_x and self.y == self.warehose_y:
+            self.status = "in_warehouse"
+            self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
+            self.image = pygame.transform.scale(self.image,
+                                                (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
+            event = f"Грузовик{self.warehouse_number} на складе"
+            event_time = round(env.now / 1000)
+            WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX
 
         yield self.env.timeout(10)  # Для того чтобы можно было вызвать как генератор
 
@@ -574,23 +588,22 @@ class TruckOutside(Truck):
 
     def __init__(self, env, warehouse_number):
         super().__init__(env)
-        if warehouse_number == 1:
+        self.warehouse_number = warehouse_number
+        if self.warehouse_number == 1:
             self.warehose_x = 250  # Координаты склада
             self.neighbors = [2]
-        elif warehouse_number == 2:
+        elif self.warehouse_number == 2:
             self.warehose_x = 470  # Координаты склада
             self.neighbors = [1, 3]
-        elif warehouse_number == 3:
+        elif self.warehouse_number == 3:
             self.warehose_x = 670  # Координаты склада
             self.neighbors = [2, 4, 0]
-        elif warehouse_number == 4:
+        elif self.warehouse_number == 4:
             self.warehose_x = 900  # Координаты склада
             self.neighbors = [3, 0]
         self.warehose_y = 160
         self.x = self.warehose_x  # Изначальное положение центра картинки(Склад)
         self.y = self.warehose_y
-
-
 
         # TODO: 1)Придумать изменение деталей на складе
         #       2)Придумать куда перемещатся за деталями и при каком случае отправляться на производство
@@ -668,6 +681,30 @@ def airplane_generator(env, airplanes_list):
             env.process(a.run())
 
 
+def moving_from_point1_to_point2(point1_x, point1_y, point2_x, point2_y):
+    """
+    Перемещение обьекта по диагонали из точки А в точку В
+    """
+    if point1_y < point2_y:
+        point1_y += TRUCK_SPEED_Y
+        if point1_y >= point2_y:
+            point1_y = point2_y
+    elif point1_y > point2_y:
+        point1_y -= TRUCK_SPEED_Y
+        if point1_y <= point2_y:
+            point1_y = point2_y
+    # self.y -= TRUCK_SPEED_Y
+    if point1_x < point2_x:
+        point1_x += TRUCK_SPEED_X
+        if point1_x >= point2_x:
+            point1_x = point2_x
+    elif point1_x > point2_x:
+        point1_x -= TRUCK_SPEED_X
+        if point1_x <= point2_x:
+            point1_x = point2_x
+    return point1_x, point1_y
+
+
 ###########################################################
 
 
@@ -701,6 +738,11 @@ renderer.add(truck_local1)
 outside_trucks = [TruckOutside(env, warehouse_number=i) for i in range(1, 5)]
 for truck in outside_trucks:
     renderer.add(truck)
+
+trucks = outside_trucks.copy()
+trucks.append(truck_local1)
+
+# print([truck.warehouse_number for truck in trucks])
 
 
 # service_station = simpy.Resource(env, number_station)  # Общий ресурс - станции обслуживания
