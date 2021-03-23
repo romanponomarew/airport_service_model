@@ -421,7 +421,7 @@ class Loader:
                         yield env.process(truck_local1.loading())
                         truck_local1.loading_status = "done"
                     if truck_local1.loading_status == "done":
-                        yield env.process(truck_local1.to_warehouse())
+                        yield env.process(truck_local1.to_local_warehouse())
 
     def return_to_warehouse(self):
         """
@@ -477,9 +477,10 @@ class Truck:
 
     def __init__(self, env):
         self.warehose_y = None
-        self.production_x = None
-        self.production_y = None
+        self.production_x = 530
+        self.production_y = 80
         self.warehose_x = None
+        self.neighbors = None  # Соседние склады
         self.IMG_size = 50
         self.image = pygame.image.load("truck.png")  # Загрузка в pygame картинки
         self.image = pygame.transform.scale(self.image,
@@ -519,7 +520,7 @@ class Truck:
                 event_time = round(env.now / 1000)
         yield self.env.timeout(10)  # # Для того чтобы можно было вызвать как генератор
 
-    def to_warehouse(self):
+    def to_local_warehouse(self):
         """Перемещение грузовика от завода к складу"""
         global WAREHOSE_STATION_SIZE2
         global event, event_time
@@ -554,12 +555,14 @@ class TruckLocal(Truck):
 
     def __init__(self, env):
         super().__init__(env)
-        self.production_x = 680  # Координаты внешнего склада
+        self.production_x = 690  # Координаты внешнего склада
         self.production_y = 230
-        self.warehose_x = 680  # Координаты склада
-        self.warehose_y = 410
+        self.warehose_x = 690  # Координаты склада
+        self.warehose_y = 430
         self.x = self.warehose_x  # Изначальное положение центра картинки(Склад)
         self.y = self.warehose_y
+        self.warehouse_number = 0
+        self.neighbors = [2, 3, 4]
 
 
 class TruckOutside(Truck):
@@ -572,24 +575,25 @@ class TruckOutside(Truck):
     def __init__(self, env, warehouse_number):
         super().__init__(env)
         if warehouse_number == 1:
-            self.production_x = 280  # Координаты внешнего склада
-            self.production_y = 50
             self.warehose_x = 250  # Координаты склада
+            self.neighbors = [2]
         elif warehouse_number == 2:
-            self.production_x = 680  # Координаты внешнего склада
-            self.production_y = 230
             self.warehose_x = 470  # Координаты склада
+            self.neighbors = [1, 3]
         elif warehouse_number == 3:
-            self.production_x = 680  # Координаты внешнего склада
-            self.production_y = 230
             self.warehose_x = 670  # Координаты склада
+            self.neighbors = [2, 4, 0]
         elif warehouse_number == 4:
-            self.production_x = 680  # Координаты внешнего склада
-            self.production_y = 230
             self.warehose_x = 900  # Координаты склада
+            self.neighbors = [3, 0]
         self.warehose_y = 160
         self.x = self.warehose_x  # Изначальное положение центра картинки(Склад)
         self.y = self.warehose_y
+
+
+
+        # TODO: 1)Придумать изменение деталей на складе
+        #       2)Придумать куда перемещатся за деталями и при каком случае отправляться на производство
 
 
 class Monitoring:
@@ -653,8 +657,6 @@ class Monitoring:
         self.parameter_displaying(text="Время симуляции:", parameter=round(env.now / 1000), x=710, y=620)
 
 
-
-
 ###########################################################
 def airplane_generator(env, airplanes_list):
     """Генерируем новые самолеты, которые прибывают на обслуживание"""
@@ -696,14 +698,9 @@ for mechanic in mechanics:
 truck_local1 = TruckLocal(env)
 renderer.add(truck_local1)
 
-truck_outside1 = TruckOutside(env, warehouse_number=1)
-renderer.add(truck_outside1)
-truck_outside2 = TruckOutside(env, warehouse_number=2)
-renderer.add(truck_outside2)
-truck_outside3 = TruckOutside(env, warehouse_number=3)
-renderer.add(truck_outside3)
-truck_outside4 = TruckOutside(env, warehouse_number=4)
-renderer.add(truck_outside4)
+outside_trucks = [TruckOutside(env, warehouse_number=i) for i in range(1, 5)]
+for truck in outside_trucks:
+    renderer.add(truck)
 
 
 # service_station = simpy.Resource(env, number_station)  # Общий ресурс - станции обслуживания
