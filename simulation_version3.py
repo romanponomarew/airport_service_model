@@ -475,6 +475,9 @@ class Truck:
         self.warehouse_number = 0
         self.other_warehouse_now = None
 
+        self.max_number_of_details_on_warehouse = 120
+        self.number_of_details_on_warehouse = 100
+
         # self.warehouse_number = warehouse_number  # 0, 1, 2, 3, 4 (Если №0 - локальный склад, АТБ)
 
         # self.production_x = 680  # Координаты внешнего склада
@@ -536,6 +539,8 @@ class Truck:
             event = f"Грузовик{self.warehouse_number} на складе"
             event_time = round(env.now / 1000)
             WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX
+            self.number_of_details_on_warehouse = self.max_number_of_details_on_warehouse
+
 
         yield self.env.timeout(10)  # Для того чтобы можно было вызвать как генератор
 
@@ -590,14 +595,42 @@ class TruckOutside(Truck):
         self.warehose_y = 160
         self.x = self.warehose_x  # Изначальное положение центра картинки(Склад)
         self.y = self.warehose_y
+        self.max_number_of_details_on_warehouse = 120
+        self.number_of_details_on_warehouse = 100
 
         # TODO: 1)Придумать изменение деталей на складе
         #       2)Придумать куда перемещатся за деталями и при каком случае отправляться на производство
 
+    def _change_the_number_of_details(self):
+        """
+        Время от времени случайным образом уменьшать количество деталей на собственном складе
+        """
+        used_parts = random.randint(1, 30)
+        self.number_of_details_on_warehouse -= used_parts
+        yield self.env.timeout(5000)
+
+
+
     def run(self):
         while True:
-            yield from ordering_new_details(truck_object=self)
+            if self.number_of_details_on_warehouse >= 30:
+                yield self.env.process(self._change_the_number_of_details())
+            else:
+                yield from ordering_new_details(truck_object=self)
+            if (self.number_of_details_on_warehouse / self.max_number_of_details_on_warehouse)*100 <= THRESHOLD:
+                yield from ordering_new_details(truck_object=self)
             yield self.env.timeout(50)
+
+    def __call__(self, *args, **kwargs):
+        self.image1 = self.image.get_rect(topleft=(self.x, self.y))
+        screen.blit(self.image, self.image1)  # Расположить картинку по координатам
+
+        font_10 = pygame.font.Font(None, 18)
+        display_text = font_10.render("Детали:", True, (0, 0, 255))
+        screen.blit(display_text, [self.warehose_x, 210])
+        display_parametr = font_10.render(str(self.number_of_details_on_warehouse), True, (0, 0, 255))
+        screen.blit(display_parametr, [self.warehose_x + 130 + (-70), 210])
+
 
 
 class Monitoring:
@@ -648,9 +681,9 @@ class Monitoring:
                                   indent=35)
 
         # ################### Отображение кол-ва деталей на внешних складах: ###################
-        details_x_list = [230, 450, 650, 865]
-        for details_x in details_x_list:
-            self.parameter_displaying(text="Детали:", parameter=WAREHOSE_STATION_SIZE2, x=details_x, y=210, indent=-70)
+        # details_x_list = [230, 450, 650, 865]
+        # for details_x in details_x_list:
+        #     self.parameter_displaying(text="Детали:", parameter=WAREHOSE_STATION_SIZE2, x=details_x, y=210, indent=-70)
 
         # From Monitoring1(Для отладки)
         # Отображение события:
