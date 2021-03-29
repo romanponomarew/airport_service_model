@@ -402,7 +402,6 @@ class Loader:
             self.loader_details = details_required
             self.warehose_status = "full"
 
-
     def return_to_warehouse(self):
         """
         Если грузчик на станции обслуживания и там находится самолет, требующий ремонта -
@@ -460,7 +459,7 @@ class Truck:
 
     def __init__(self, env):
         self.warehose_y = None
-        self.production_x = 530
+        self.production_x = 530  # Координаты внешнего производства
         self.production_y = 80
         self.warehose_x = None
         self.neighbors = None  # Соседние склады
@@ -472,6 +471,9 @@ class Truck:
         self.status_prev = ""  # "on_parking", "on_service_station", "moving"
         self.status = "in_warehouse"  # "on_production"
         self.loading_status = ""  # Загружается ли сейчас грузовик? ("now"/"done")
+
+        self.warehouse_number = 0
+        self.other_warehouse_now = None
 
         # self.warehouse_number = warehouse_number  # 0, 1, 2, 3, 4 (Если №0 - локальный склад, АТБ)
 
@@ -487,19 +489,17 @@ class Truck:
 
     def _selecting_other_warehouse(self):
         random_warehouse_number = random.choice(self.neighbors)
-        # random_warehouse_number = 4
         print(self.neighbors)
-        print(random_warehouse_number)
-        for other_warehouse in trucks:
-            # random_warehouse_number = random.choice(self.neighbors)
-            if other_warehouse.warehouse_number == random_warehouse_number:
-                self.production_x = other_warehouse.warehose_x
-                self.production_y = other_warehouse.warehose_y
+        self.production_x, self.production_y = warehouse_coordinates(number_of_warehouse=random_warehouse_number)
+        self.other_warehouse_now = random_warehouse_number
+        print(f"Грузовик({self.warehouse_number}) выбрал внешний склад под номером({self.other_warehouse_now})")
+        return
 
     def to_other_warehouse(self):
         """Перемещение грузовика от склада к производству/заводу"""
         global event_time, event
-        self._selecting_other_warehouse()
+        if self.other_warehouse_now is None:
+            self._selecting_other_warehouse()
         self.x, self.y = moving_from_point1_to_point2(
             point1_x=self.x,
             point1_y=self.y,
@@ -517,10 +517,11 @@ class Truck:
 
         yield self.env.timeout(10)  # # Для того чтобы можно было вызвать как генератор
 
-    def to_local_warehouse(self):
+    def back_to_local_warehouse(self):
         """Перемещение грузовика от завода к складу"""
         global WAREHOSE_STATION_SIZE2
         global event, event_time
+        print(f"Грузовик({self.warehouse_number}) возвращается на свой склад с новыми запчастями")
         self.x, self.y = moving_from_point1_to_point2(
             point1_x=self.x,
             point1_y=self.y,
@@ -552,13 +553,15 @@ class TruckLocal(Truck):
 
     def __init__(self, env):
         super().__init__(env)
-        self.production_x = 690  # Координаты внешнего склада
-        self.production_y = 230
+        # self.production_x = 690  # Координаты внешнего склада
+        # self.production_y = 230
         self.warehose_x = 690  # Координаты склада
         self.warehose_y = 430
         self.x = self.warehose_x  # Изначальное положение центра картинки(Склад)
         self.y = self.warehose_y
         self.warehouse_number = 0
+        # self.production_y = None
+        # self.production_x = None
         self.neighbors = [2, 3, 4]
 
 
@@ -595,6 +598,7 @@ class TruckOutside(Truck):
         while True:
             yield from ordering_new_details(truck_object=self)
             yield self.env.timeout(50)
+
 
 class Monitoring:
     """Класс для отображения текста и состояния переменных"""
@@ -703,11 +707,35 @@ def ordering_new_details(truck_object):
         yield env.process(truck_object.to_other_warehouse())
     # Грузовик находится на производстве:
     if truck_object.status == "on_production":
+        truck_object.other_warehouse_now = None
         if truck_object.loading_status == "now":
             yield env.process(truck_object.loading())
             truck_object.loading_status = "done"
         if truck_object.loading_status == "done":
-            yield env.process(truck_object.to_local_warehouse())
+            yield env.process(truck_object.back_to_local_warehouse())
+
+
+def warehouse_coordinates(number_of_warehouse):
+    """
+    Определение координат внешнего склада, к которому нужно ехать грузовику
+    """
+    warehouse_x = None
+    if number_of_warehouse == 1:
+        warehouse_x = 250
+    elif number_of_warehouse == 2:
+        warehouse_x = 470
+    elif number_of_warehouse == 3:
+        warehouse_x = 670
+    elif number_of_warehouse == 4:
+        warehouse_x = 900
+    warehouse_y = 160
+
+    if number_of_warehouse == 0:
+        warehouse_x = 690
+        warehouse_y = 430
+    return warehouse_x, warehouse_y
+
+
 ###########################################################
 
 
@@ -744,10 +772,8 @@ for truck in outside_trucks:
     env.process(truck.run())
 
 trucks = outside_trucks.copy()
+
 trucks.append(truck_local1)
-
-# print([truck.warehouse_number for truck in trucks])
-
 
 # service_station = simpy.Resource(env, number_station)  # Общий ресурс - станции обслуживания
 # warehose = simpy.Container(env, WAREHOSE_STATION_SIZE, init=WAREHOSE_STATION_SIZE)  # Склад(контейнер) - механики /
