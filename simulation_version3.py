@@ -492,12 +492,21 @@ class Truck:
         yield self.env.timeout(4000)
 
     def _selecting_other_warehouse(self):
-        random_warehouse_number = random.choice(self.neighbors)
-        print(self.neighbors)
-        self.production_x, self.production_y = warehouse_coordinates(number_of_warehouse=random_warehouse_number)
-        self.other_warehouse_now = random_warehouse_number
-        print(f"Грузовик({self.warehouse_number}) выбрал внешний склад под номером({self.other_warehouse_now})")
-        return
+        for _ in (0, len(self.neighbors) + 1):
+            random_warehouse_number = random.choice(self.neighbors)
+            if trucks[random_warehouse_number].number_of_details_on_warehouse >= 0.6 * trucks[random_warehouse_number].max_number_of_details_on_warehouse:
+                break
+            else:
+                continue
+        if random_warehouse_number is not None:
+            print(self.neighbors)
+            self.production_x, self.production_y = warehouse_coordinates(number_of_warehouse=random_warehouse_number)
+            self.other_warehouse_now = random_warehouse_number
+            print(f"Грузовик({self.warehouse_number}) выбрал внешний склад под номером({self.other_warehouse_now})")
+            return
+        else:
+            """ Отправится на производство за новыми деталями"""
+            pass
 
     def to_other_warehouse(self):
         """Перемещение грузовика от склада к производству/заводу"""
@@ -625,14 +634,13 @@ class TruckOutside(Truck):
             yield self.env.timeout(50)
 
     def __call__(self, *args, **kwargs):
-        self.image1 = self.image.get_rect(topleft=(self.x, self.y))
-        screen.blit(self.image, self.image1)  # Расположить картинку по координатам
+        super().__call__(screen)
+        monitoring_object.parameter_displaying(
+            text="Детали:",
+            parameter=self.number_of_details_on_warehouse,
+            x=self.warehose_x, y=210, indent=-70
+            )
 
-        font_10 = pygame.font.Font(None, 18)
-        display_text = font_10.render("Детали:", True, (0, 0, 255))
-        screen.blit(display_text, [self.warehose_x, 210])
-        display_parametr = font_10.render(str(self.number_of_details_on_warehouse), True, (0, 0, 255))
-        screen.blit(display_parametr, [self.warehose_x + 130 + (-70), 210])
 
 
 
@@ -682,11 +690,6 @@ class Monitoring:
         # ################### Отображение кол-ва деталей на локальном складе: ###################
         self.parameter_displaying(text="Кол-во деталей на складе:", parameter=truck_local.number_of_details_on_warehouse, x=810, y=445,
                                   indent=35)
-
-        # ################### Отображение кол-ва деталей на внешних складах: ###################
-        # details_x_list = [230, 450, 650, 865]
-        # for details_x in details_x_list:
-        #     self.parameter_displaying(text="Детали:", parameter=WAREHOSE_STATION_SIZE2, x=details_x, y=210, indent=-70)
 
         # From Monitoring1(Для отладки)
         # Отображение события:
@@ -784,7 +787,8 @@ event_time = 0  # Время глобального события
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 renderer = FrameRenderer(screen)
 env = PyGameEnvironment(renderer, factor=SIMULATION_SPEED, strict=False)  # factor - Для скорости воспроизведения модели
-renderer.add(Monitoring(stoyanka_counts))
+monitoring_object = Monitoring(stoyanka_counts)
+renderer.add(monitoring_object)
 
 station1 = Station(number_of_station=1)
 station2 = Station(number_of_station=2)
