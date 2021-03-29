@@ -49,8 +49,8 @@ WAREHOSE_STATION_SIZE = 150  # Максимальное(изначальное) 
 THRESHOLD = 40  # Порог имеющихся деталей для заказа новых запчастей (в %)
 
 iteration = 0
-WAREHOSE_MAX = 70
-WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX  # Максимальное(изначальное) количество деталей на складе
+# WAREHOSE_MAX = 70
+# WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX  # Максимальное(изначальное) количество деталей на складе
 
 
 class Station:
@@ -367,7 +367,7 @@ class Loader:
                     station_object.loader_to_station = 1
                     return station_object
 
-    def departure_from_warehouse_to_station(self, WAREHOSE_STATION_SIZE2, station_object):
+    def departure_from_warehouse_to_station(self, station_object):
         """
         Если грузчиком получен запрос станции о ремонте, он проверяет:
          1.находится ли кто-то из грузчиков уже в пути
@@ -381,7 +381,7 @@ class Loader:
         if warehouse_loaders != 0:
             warehouse_loaders -= 1
         if station_object.loader_to_station and self.status_now == f"to_station{station_number}":
-            if WAREHOSE_STATION_SIZE2 > station_object.details_required:
+            if truck_local.number_of_details_on_warehouse > station_object.details_required:
                 self.take_details_from_warehouse(details_required=station_object.details_required)
                 if self.loader_details != 0:
                     if self.search_status == "search":
@@ -396,9 +396,10 @@ class Loader:
         Забрать необходимое кол-во деталей(для станции тех.обслуживания №1 или №2) со склада:
         Уменьшить кол-во деталей на складе
         """
-        global WAREHOSE_STATION_SIZE2
+        # global WAREHOSE_STATION_SIZE2
         if self.warehose_status == "empty":
-            WAREHOSE_STATION_SIZE2 -= details_required
+            # WAREHOSE_STATION_SIZE2 -= details_required
+            truck_local.number_of_details_on_warehouse -= details_required
             self.loader_details = details_required
             self.warehose_status = "full"
 
@@ -432,13 +433,13 @@ class Loader:
 
             # Грузчик отпраляется на запросившую ремонт станцию обслуживания
             if station_object:
-                yield from self.departure_from_warehouse_to_station(WAREHOSE_STATION_SIZE2, station_object)
+                yield from self.departure_from_warehouse_to_station(station_object)
 
             # Говорим грузовику отпрваится на склад за новыми запчастями:
             for station_object in stations_objects:
-                if (WAREHOSE_STATION_SIZE2 < station_object.details_required) \
-                        or (WAREHOSE_STATION_SIZE2 < WAREHOSE_MAX * (THRESHOLD / 100)):
-                    yield from ordering_new_details(truck_object=truck_local1)
+                if (truck_local.number_of_details_on_warehouse < station_object.details_required) \
+                        or (truck_local.number_of_details_on_warehouse < truck_local.max_number_of_details_on_warehouse * (THRESHOLD / 100)):
+                    yield from ordering_new_details(truck_object=truck_local)
 
             # Отправление грузчика при завершении ремонта со станции обратно на склад:
             yield from self.return_to_warehouse()
@@ -522,7 +523,7 @@ class Truck:
 
     def back_to_local_warehouse(self):
         """Перемещение грузовика от завода к складу"""
-        global WAREHOSE_STATION_SIZE2
+        # global WAREHOSE_STATION_SIZE2
         global event, event_time
         print(f"Грузовик({self.warehouse_number}) возвращается на свой склад с новыми запчастями")
         self.x, self.y = moving_from_point1_to_point2(
@@ -538,7 +539,9 @@ class Truck:
                                                 (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
             event = f"Грузовик{self.warehouse_number} на складе"
             event_time = round(env.now / 1000)
-            WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX
+            # TODO: Изменить количество деталей на локальном складе к ООП стилю
+            # truck_local.number_of_details_on_warehouse = truck_local.max_number_of_details_on_warehouse
+            # TODO: Добавить уменьшение деталей на складе, с которого взяли детали.
             self.number_of_details_on_warehouse = self.max_number_of_details_on_warehouse
 
 
@@ -677,7 +680,7 @@ class Monitoring:
         # ################### Отображение кол-ва команд грузчиков на локальном складе: ###################
         self.parameter_displaying(text=loaders_counts_text, parameter=warehouse_loaders, x=810, y=430, indent=-20)
         # ################### Отображение кол-ва деталей на локальном складе: ###################
-        self.parameter_displaying(text="Кол-во деталей на складе:", parameter=WAREHOSE_STATION_SIZE2, x=810, y=445,
+        self.parameter_displaying(text="Кол-во деталей на складе:", parameter=truck_local.number_of_details_on_warehouse, x=810, y=445,
                                   indent=35)
 
         # ################### Отображение кол-ва деталей на внешних складах: ###################
@@ -734,7 +737,6 @@ def ordering_new_details(truck_object):
     Грузчики ищут на складе нужные для ремонта детали.
     Если деталей недостаточно, они сообщают грузовику отправится на производство за новыми запчастями
     """
-    global WAREHOSE_STATION_SIZE2
     # Ждем грузовик с новыми запчастями и пополняем запас склада
     if truck_object.status == "in_warehouse":
         yield env.process(truck_object.to_other_warehouse())
@@ -796,8 +798,8 @@ for mechanic in mechanics:
     renderer.add(mechanic)
     env.process(mechanic.run())
 
-truck_local1 = TruckLocal(env)
-renderer.add(truck_local1)
+truck_local = TruckLocal(env)
+renderer.add(truck_local)
 
 outside_trucks = [TruckOutside(env, warehouse_number=i) for i in range(1, 5)]
 for truck in outside_trucks:
@@ -806,7 +808,7 @@ for truck in outside_trucks:
 
 trucks = outside_trucks.copy()
 
-trucks.append(truck_local1)
+trucks.append(truck_local)
 
 # service_station = simpy.Resource(env, number_station)  # Общий ресурс - станции обслуживания
 # warehose = simpy.Container(env, WAREHOSE_STATION_SIZE, init=WAREHOSE_STATION_SIZE)  # Склад(контейнер) - механики /
