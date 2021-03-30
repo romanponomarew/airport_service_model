@@ -25,7 +25,7 @@ TOTAL_NUMBER_OF_AIRPLANES = 40
 # Define constants for the screen width and height
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 780
-SIMULATION_SPEED = 0.0003  # 0.005 - NORMAL_speed, 0.0001 - FAST_speed, 0.0000000001 - MAX_speed
+SIMULATION_SPEED = 0.001 # 0.0003  # 0.005 - NORMAL_speed, 0.0001 - FAST_speed, 0.0000000001 - MAX_speed
 # Airplane_Settings####################
 AIRPLANE_SPEED_X = 3
 AIRPLANE_SPEED_Y = 10
@@ -534,12 +534,20 @@ class Truck:
             event = "Грузовик на заводе"
             event_time = round(env.now / 1000)
 
+            if self.x != 530 and self.y != 80:
+                # TODO:Уменьшить кол-во деталей соседнего склада
+                trucks[self.other_warehouse_now].number_of_details_on_warehouse -= 0.3*self.max_number_of_details_on_warehouse
+                pass
+
         yield self.env.timeout(10)  # # Для того чтобы можно было вызвать как генератор
 
     def back_to_local_warehouse(self):
         """Перемещение грузовика от завода к складу"""
         global event, event_time
         print(f"Грузовик({self.warehouse_number}) возвращается на свой склад с новыми запчастями")
+        from_production = False
+        if self.x == 530 and self.y == 80:
+            from_production = True
         self.x, self.y = moving_from_point1_to_point2(
             point1_x=self.x,
             point1_y=self.y,
@@ -556,7 +564,10 @@ class Truck:
             # TODO: Изменить количество деталей на локальном складе к ООП стилю
             # truck_local.number_of_details_on_warehouse = truck_local.max_number_of_details_on_warehouse
             # TODO: Добавить уменьшение деталей на складе, с которого взяли детали.
-            self.number_of_details_on_warehouse = self.max_number_of_details_on_warehouse
+            if not from_production:
+                self.number_of_details_on_warehouse += 0.3*self.max_number_of_details_on_warehouse
+            elif from_production:
+                self.number_of_details_on_warehouse = self.max_number_of_details_on_warehouse
 
         yield self.env.timeout(10)  # Для того чтобы можно было вызвать как генератор
 
@@ -574,15 +585,11 @@ class TruckLocal(Truck):
 
     def __init__(self, env):
         super().__init__(env)
-        # self.production_x = 690  # Координаты внешнего склада
-        # self.production_y = 230
         self.warehose_x = 690  # Координаты склада
         self.warehose_y = 430
         self.x = self.warehose_x  # Изначальное положение центра картинки(Склад)
         self.y = self.warehose_y
         self.warehouse_number = 0
-        # self.production_y = None
-        # self.production_x = None
         self.neighbors = [2, 3, 4]
 
 
@@ -621,9 +628,10 @@ class TruckOutside(Truck):
         """
         Время от времени случайным образом уменьшать количество деталей на собственном складе
         """
-        used_parts = random.randint(1, 30)
+        time_for_change_details = random.randint(5000, 7000)
+        used_parts = random.randint(1, 20)
         self.number_of_details_on_warehouse -= used_parts
-        yield self.env.timeout(5000)
+        yield self.env.timeout(time_for_change_details)
 
     def run(self):
         while True:
