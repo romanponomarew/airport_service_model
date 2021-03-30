@@ -21,11 +21,11 @@ import random
 import json
 
 AIRPLANE_ARRIVING_TIME = [3000, 7000]  # Прибытие самолета каждые [min, max] секунд
-TOTAL_NUMBER_OF_AIRPLANES = 40
+TOTAL_NUMBER_OF_AIRPLANES = 60
 # Define constants for the screen width and height
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 780
-SIMULATION_SPEED = 0.001 # 0.0003  # 0.005 - NORMAL_speed, 0.0001 - FAST_speed, 0.0000000001 - MAX_speed
+SIMULATION_SPEED = 0.0003  # 0.005 - NORMAL_speed, 0.0001 - FAST_speed, 0.0000000001 - MAX_speed
 # Airplane_Settings####################
 AIRPLANE_SPEED_X = 3
 AIRPLANE_SPEED_Y = 10
@@ -483,6 +483,9 @@ class Truck:
         self.max_number_of_details_on_warehouse = 120
         self.number_of_details_on_warehouse = 100
 
+        self.from_production = False
+
+
         # self.warehouse_number = warehouse_number  # 0, 1, 2, 3, 4 (Если №0 - локальный склад, АТБ)
         # self.warehose_x = 680  # Координаты склада
         # self.warehose_y = 410
@@ -496,7 +499,7 @@ class Truck:
         for _ in (0, len(self.neighbors) + 1):
             random_warehouse_number = random.choice(self.neighbors)
             neighbor_warehouse = trucks[random_warehouse_number]
-            if neighbor_warehouse.number_of_details_on_warehouse >= 0.6 * neighbor_warehouse.max_number_of_details_on_warehouse:
+            if neighbor_warehouse.number_of_details_on_warehouse >= 0.5 * neighbor_warehouse.max_number_of_details_on_warehouse:
                 break
             else:
                 random_warehouse_number = None
@@ -509,8 +512,8 @@ class Truck:
             return
         else:
             """ Отправится на производство за новыми деталями"""
-            print(f"Грузовик ({self.warehouse_number}) должен отправится на производство,"
-                  f" потому что у соседних складов({self.neighbors}) недостаточно деталей")
+            # print(f"Грузовик ({self.warehouse_number}) должен отправится на производство,"
+            #       f" потому что у соседних складов({self.neighbors}) недостаточно деталей")
             # Не меняем координаты производства, определенные по умолчанию.
             # Поэтому грузовик отправляется на производтсво
 
@@ -534,20 +537,24 @@ class Truck:
             event = "Грузовик на заводе"
             event_time = round(env.now / 1000)
 
-            if self.x != 530 and self.y != 80:
+            if self.from_production is False and self.other_warehouse_now:
                 # TODO:Уменьшить кол-во деталей соседнего склада
-                trucks[self.other_warehouse_now].number_of_details_on_warehouse -= 0.3*self.max_number_of_details_on_warehouse
-                pass
+                print(f"Грузовик ({self.warehouse_number}) уменьшает кол-во деталей на складе ({self.other_warehouse_now})")
+                # trucks[self.other_warehouse_now].number_of_details_on_warehouse -= 0.3*self.max_number_of_details_on_warehouse
+                trucks[
+                    self.other_warehouse_now].number_of_details_on_warehouse -= 20000
+                print(
+                    f"Теперь на складе ({self.other_warehouse_now}) деталей = ({trucks[self.other_warehouse_now].number_of_details_on_warehouse})")
 
         yield self.env.timeout(10)  # # Для того чтобы можно было вызвать как генератор
 
     def back_to_local_warehouse(self):
         """Перемещение грузовика от завода к складу"""
         global event, event_time
-        print(f"Грузовик({self.warehouse_number}) возвращается на свой склад с новыми запчастями")
-        from_production = False
+        # print(f"Грузовик({self.warehouse_number}) возвращается на свой склад с новыми запчастями")
+        # from_production = False
         if self.x == 530 and self.y == 80:
-            from_production = True
+            self.from_production = True
         self.x, self.y = moving_from_point1_to_point2(
             point1_x=self.x,
             point1_y=self.y,
@@ -561,13 +568,14 @@ class Truck:
                                                 (self.IMG_size + 20, self.IMG_size))  # Изменение размера картинки
             event = f"Грузовик{self.warehouse_number} на складе"
             event_time = round(env.now / 1000)
-            # TODO: Изменить количество деталей на локальном складе к ООП стилю
-            # truck_local.number_of_details_on_warehouse = truck_local.max_number_of_details_on_warehouse
             # TODO: Добавить уменьшение деталей на складе, с которого взяли детали.
-            if not from_production:
+            if not self.from_production:
                 self.number_of_details_on_warehouse += 0.3*self.max_number_of_details_on_warehouse
-            elif from_production:
-                self.number_of_details_on_warehouse = self.max_number_of_details_on_warehouse
+            elif self.from_production:
+                print(f"Грузовик ({self.warehouse_number}) пополняет свой склад до максимума по возвращению с производства")
+                # self.number_of_details_on_warehouse = self.max_number_of_details_on_warehouse
+                self.number_of_details_on_warehouse += 10000
+                self.from_production = False
 
         yield self.env.timeout(10)  # Для того чтобы можно было вызвать как генератор
 
@@ -821,7 +829,7 @@ for truck in outside_trucks:
 
 trucks = outside_trucks.copy()
 
-trucks.append(truck_local)
+trucks.insert(0, truck_local)
 
 # service_station = simpy.Resource(env, number_station)  # Общий ресурс - станции обслуживания
 # warehose = simpy.Container(env, WAREHOSE_STATION_SIZE, init=WAREHOSE_STATION_SIZE)  # Склад(контейнер) - механики /
