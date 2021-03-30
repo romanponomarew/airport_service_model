@@ -494,9 +494,11 @@ class Truck:
     def _selecting_other_warehouse(self):
         for _ in (0, len(self.neighbors) + 1):
             random_warehouse_number = random.choice(self.neighbors)
-            if trucks[random_warehouse_number].number_of_details_on_warehouse >= 0.6 * trucks[random_warehouse_number].max_number_of_details_on_warehouse:
+            neighbor_warehouse = trucks[random_warehouse_number]
+            if neighbor_warehouse.number_of_details_on_warehouse >= 0.6 * neighbor_warehouse.max_number_of_details_on_warehouse:
                 break
             else:
+                random_warehouse_number = None
                 continue
         if random_warehouse_number is not None:
             print(self.neighbors)
@@ -506,7 +508,10 @@ class Truck:
             return
         else:
             """ Отправится на производство за новыми деталями"""
-            pass
+            print(f"Грузовик ({self.warehouse_number}) должен отправится на производство,"
+                  f" потому что у соседних складов({self.neighbors}) недостаточно деталей")
+            # Не меняем координаты производства, определенные по умолчанию.
+            # Поэтому грузовик отправляется на производтсво
 
     def to_other_warehouse(self):
         """Перемещение грузовика от склада к производству/заводу"""
@@ -532,7 +537,6 @@ class Truck:
 
     def back_to_local_warehouse(self):
         """Перемещение грузовика от завода к складу"""
-        # global WAREHOSE_STATION_SIZE2
         global event, event_time
         print(f"Грузовик({self.warehouse_number}) возвращается на свой склад с новыми запчастями")
         self.x, self.y = moving_from_point1_to_point2(
@@ -552,7 +556,6 @@ class Truck:
             # truck_local.number_of_details_on_warehouse = truck_local.max_number_of_details_on_warehouse
             # TODO: Добавить уменьшение деталей на складе, с которого взяли детали.
             self.number_of_details_on_warehouse = self.max_number_of_details_on_warehouse
-
 
         yield self.env.timeout(10)  # Для того чтобы можно было вызвать как генератор
 
@@ -620,8 +623,6 @@ class TruckOutside(Truck):
         used_parts = random.randint(1, 30)
         self.number_of_details_on_warehouse -= used_parts
         yield self.env.timeout(5000)
-
-
 
     def run(self):
         while True:
