@@ -49,6 +49,8 @@ WAREHOSE_STATION_SIZE = 150  # Максимальное(изначальное) 
 THRESHOLD = 40  # Порог имеющихся деталей для заказа новых запчастей (в %)
 
 iteration = 0
+
+
 # WAREHOSE_MAX = 70
 # WAREHOSE_STATION_SIZE2 = WAREHOSE_MAX  # Максимальное(изначальное) количество деталей на складе
 
@@ -438,7 +440,9 @@ class Loader:
             # Говорим грузовику отпрваится на склад за новыми запчастями:
             for station_object in stations_objects:
                 if (truck_local.number_of_details_on_warehouse < station_object.details_required) \
-                        or (truck_local.number_of_details_on_warehouse < truck_local.max_number_of_details_on_warehouse * (THRESHOLD / 100)):
+                        or (
+                        truck_local.number_of_details_on_warehouse < truck_local.max_number_of_details_on_warehouse * (
+                        THRESHOLD / 100)):
                     yield from ordering_new_details(truck_object=truck_local)
 
             # Отправление грузчика при завершении ремонта со станции обратно на склад:
@@ -480,9 +484,6 @@ class Truck:
         self.number_of_details_on_warehouse = 100
 
         # self.warehouse_number = warehouse_number  # 0, 1, 2, 3, 4 (Если №0 - локальный склад, АТБ)
-
-        # self.production_x = 680  # Координаты внешнего склада
-        # self.production_y = 230
         # self.warehose_x = 680  # Координаты склада
         # self.warehose_y = 410
         # self.x = self.warehose_x  # Изначальное положение центра картинки(Склад)
@@ -517,7 +518,7 @@ class Truck:
         """Перемещение грузовика от склада к производству/заводу"""
         global event_time, event
         if self.other_warehouse_now is None:
-            self._selecting_other_warehouse()
+            self._selecting_other_warehouse()  # Выбор склада с необходимым количеством деталей
         self.x, self.y = moving_from_point1_to_point2(
             point1_x=self.x,
             point1_y=self.y,
@@ -626,11 +627,11 @@ class TruckOutside(Truck):
 
     def run(self):
         while True:
-            if self.number_of_details_on_warehouse >= 30:
+            if self.number_of_details_on_warehouse >= 30:  # TODO: Заменить на процент
                 yield self.env.process(self._change_the_number_of_details())
             else:
                 yield from ordering_new_details(truck_object=self)
-            if (self.number_of_details_on_warehouse / self.max_number_of_details_on_warehouse)*100 <= THRESHOLD:
+            if (self.number_of_details_on_warehouse / self.max_number_of_details_on_warehouse) * 100 <= THRESHOLD:
                 yield from ordering_new_details(truck_object=self)
             yield self.env.timeout(50)
 
@@ -640,9 +641,7 @@ class TruckOutside(Truck):
             text="Детали:",
             parameter=self.number_of_details_on_warehouse,
             x=self.warehose_x, y=210, indent=-70
-            )
-
-
+        )
 
 
 class Monitoring:
@@ -689,7 +688,8 @@ class Monitoring:
         # ################### Отображение кол-ва команд грузчиков на локальном складе: ###################
         self.parameter_displaying(text=loaders_counts_text, parameter=warehouse_loaders, x=810, y=430, indent=-20)
         # ################### Отображение кол-ва деталей на локальном складе: ###################
-        self.parameter_displaying(text="Кол-во деталей на складе:", parameter=truck_local.number_of_details_on_warehouse, x=810, y=445,
+        self.parameter_displaying(text="Кол-во деталей на складе:",
+                                  parameter=truck_local.number_of_details_on_warehouse, x=810, y=445,
                                   indent=35)
 
         # From Monitoring1(Для отладки)
