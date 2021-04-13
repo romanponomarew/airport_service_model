@@ -25,7 +25,7 @@ TOTAL_NUMBER_OF_AIRPLANES = 60
 # Define constants for the screen width and height
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 780
-SIMULATION_SPEED = 0.0003  # 0.005 - NORMAL_speed, 0.0001 - FAST_speed, 0.0000000001 - MAX_speed
+SIMULATION_SPEED = 0.0002  # 0.005 - NORMAL_speed, 0.0001 - FAST_speed, 0.0000000001 - MAX_speed
 # Airplane_Settings####################
 AIRPLANE_SPEED_X = 3
 AIRPLANE_SPEED_Y = 10
@@ -37,8 +37,8 @@ LOADER_SPEED_X = 3
 LOADER_SPEED_Y = 2
 NUMBER_OF_LOADERS = 3
 # Truck_Settings######################
-TRUCK_SPEED_X = 2
-TRUCK_SPEED_Y = 3
+TRUCK_SPEED_X = 0.7
+TRUCK_SPEED_Y = 0.7
 
 """Вспомогательные переменные для отображения количества агентов, координат"""
 ############################################################
@@ -226,7 +226,7 @@ class Airplane:
         results.append(self.time_result)
         event = f"Самолет{self.name} улетает"
         event_time = round(env.now / 1000)
-        if len(results) == 10:  # Когда покинет последний самолет
+        if len(results) == TOTAL_NUMBER_OF_AIRPLANES:  # Когда покинет последний самолет
             with open('file.txt', 'w+') as fw:
                 # записываем
                 json.dump(results, fw)
@@ -537,14 +537,14 @@ class Truck:
             event = "Грузовик на заводе"
             event_time = round(env.now / 1000)
 
-            if self.from_production is False and self.other_warehouse_now:
+            if self.from_production is False and self.other_warehouse_now is not None:
                 # TODO:Уменьшить кол-во деталей соседнего склада
                 print(f"Грузовик ({self.warehouse_number}) уменьшает кол-во деталей на складе ({self.other_warehouse_now})")
-                # trucks[self.other_warehouse_now].number_of_details_on_warehouse -= 0.3*self.max_number_of_details_on_warehouse
-                trucks[
-                    self.other_warehouse_now].number_of_details_on_warehouse -= 20000
+                trucks[self.other_warehouse_now].number_of_details_on_warehouse -= 0.3*self.max_number_of_details_on_warehouse
+                # trucks[
+                #     self.other_warehouse_now].number_of_details_on_warehouse -= 20000
                 print(
-                    f"Теперь на складе ({self.other_warehouse_now}) деталей = ({trucks[self.other_warehouse_now].number_of_details_on_warehouse})")
+                    f"Теперь на внешнем складе ({self.other_warehouse_now}) деталей = ({trucks[self.other_warehouse_now].number_of_details_on_warehouse})")
 
         yield self.env.timeout(10)  # # Для того чтобы можно было вызвать как генератор
 
@@ -573,8 +573,8 @@ class Truck:
                 self.number_of_details_on_warehouse += 0.3*self.max_number_of_details_on_warehouse
             elif self.from_production:
                 print(f"Грузовик ({self.warehouse_number}) пополняет свой склад до максимума по возвращению с производства")
-                # self.number_of_details_on_warehouse = self.max_number_of_details_on_warehouse
-                self.number_of_details_on_warehouse += 10000
+                self.number_of_details_on_warehouse = self.max_number_of_details_on_warehouse
+                # self.number_of_details_on_warehouse += 10000
                 self.from_production = False
 
         yield self.env.timeout(10)  # Для того чтобы можно было вызвать как генератор
