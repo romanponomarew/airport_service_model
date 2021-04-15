@@ -502,11 +502,10 @@ class Truck:
         #                     self.max_number_of_details_3_on_warehouse]
 
         self.details = [
-                        {"now": 1000, "max": 1200, "threshold": THRESHOLD},
-                        {"now": 750, "max": 1000, "threshold": THRESHOLD},
-                        {"now": 300, "max": 500, "threshold": THRESHOLD}
-                        ]
-
+            {"now": 1000, "max": 1200, "threshold": THRESHOLD},
+            {"now": 750, "max": 1000, "threshold": THRESHOLD},
+            {"now": 300, "max": 500, "threshold": THRESHOLD}
+        ]
 
         self.from_production = False
 
@@ -518,7 +517,6 @@ class Truck:
 
     def loading(self):
         yield self.env.timeout(4000)
-
 
     def _selecting_other_warehouse(self, details_type):
         for _ in (0, len(self.neighbors) + 1):
@@ -644,23 +642,22 @@ class TruckOutside(Truck):
         super().__init__(env)
         self.warehouse_number = warehouse_number
         if self.warehouse_number == 1:
-            self.warehose_x = 250  # Координаты склада
+            self.warehose_x = 225  # Координаты склада
             self.neighbors = [2]
         elif self.warehouse_number == 2:
-            self.warehose_x = 470  # Координаты склада
+            self.warehose_x = 450  # Координаты склада
             self.neighbors = [1, 3]
         elif self.warehouse_number == 3:
-            self.warehose_x = 670  # Координаты склада
+            self.warehose_x = 650  # Координаты склада
             self.neighbors = [2, 4, 0]
         elif self.warehouse_number == 4:
-            self.warehose_x = 900  # Координаты склада
+            self.warehose_x = 865  # Координаты склада
             self.neighbors = [3, 0]
         self.warehose_y = 160
         self.x = self.warehose_x  # Изначальное положение центра картинки(Склад)
         self.y = self.warehose_y
         # self.max_number_of_details_1_on_warehouse = 120
         # self.number_of_details_1_on_warehouse = 100
-
 
     # def _change_the_number_of_details(self):
     #     """
@@ -682,7 +679,6 @@ class TruckOutside(Truck):
 
         yield self.env.timeout(time_for_change_details)
 
-
     def run(self):
         while True:
             for type_of_details in self.details:
@@ -693,7 +689,6 @@ class TruckOutside(Truck):
                     while type_of_details["now"] < 0.3 * type_of_details["max"]:
                         yield from ordering_new_details(truck_object=self, details_type=details_type)
                 details_type += 1
-
 
             yield self.env.timeout(50)
 
@@ -728,7 +723,6 @@ class TruckOutside(Truck):
             count += 30
             if count > 60:
                 count = 0
-
 
 
 class Monitoring:
@@ -773,11 +767,11 @@ class Monitoring:
                                       y=text_y)
 
         # ################### Отображение кол-ва команд грузчиков на локальном складе: ###################
-        self.parameter_displaying(text=loaders_counts_text, parameter=warehouse_loaders, x=710, y=575, indent=-20)
+        self.parameter_displaying(text=loaders_counts_text, parameter=warehouse_loaders, x=710, y=565, indent=-20)
         # ################### Отображение кол-ва деталей на локальном складе: ###################
-        self.parameter_displaying(text="Кол-во деталей на складе:",
-                                  parameter=truck_local.details[0]["now"], x=710, y=590,
-                                  indent=35)
+        # self.parameter_displaying(text="Кол-во деталей на складе:",
+        #                           parameter=truck_local.details[0]["now"], x=710, y=500,
+        #                           indent=35)
 
         count = -10
         text = "Детали:"
@@ -786,7 +780,7 @@ class Monitoring:
             monitoring_object.parameter_displaying(
                 text=text,
                 parameter=type_of_details["now"],
-                x=truck_local.warehose_x + count, y=210, indent=-80
+                x=720 + count, y=590, indent=-75
             )
             text = ""
             count += 30
