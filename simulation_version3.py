@@ -5,8 +5,6 @@
     .4 внешних склада(небольшие) - принадлежат другим АТБ
     .2 грузовика на каждом из складов(1 - для пополнения запасов с производства,
         1 - для взятия деталей с внешних складов)
-    # TODO: Либо 1 грузовик на каждом складе. При суммарном недостатке деталей,
-            любой из свободных грузовиков едет на производство
 
     .Поиск деталей на складе и оформление заказа с помощью
         технологий интернета вещей - всегда известно сколько и каких деталей есть на каждом из складов
@@ -450,7 +448,7 @@ class Loader:
                         or (
                         truck_local.details[0]["now"] < truck_local.details[0]["max"] * (
                         truck_local.details[0]["threshold"] / 100)):
-                    yield from ordering_new_details(truck_object=truck_local, details_type=truck_local.details[0])
+                    yield from ordering_new_details(truck_object=truck_local, details_type=0)
 
             # Отправление грузчика при завершении ремонта со станции обратно на склад:
             yield from self.return_to_warehouse()
@@ -489,19 +487,19 @@ class Truck:
         self.warehouse_number = 0
         self.other_warehouse_now = None
 
-        self.max_number_of_details_1_on_warehouse = 1200
-        self.number_of_details_1_on_warehouse = 1000
-        self.max_number_of_details_2_on_warehouse = 1000
-        self.number_of_details_2_on_warehouse = 750
-        self.max_number_of_details_3_on_warehouse = 500
-        self.number_of_details_3_on_warehouse = 300
+        # self.max_number_of_details_1_on_warehouse = 1200
+        # self.number_of_details_1_on_warehouse = 1000
+        # self.max_number_of_details_2_on_warehouse = 1000
+        # self.number_of_details_2_on_warehouse = 750
+        # self.max_number_of_details_3_on_warehouse = 500
+        # self.number_of_details_3_on_warehouse = 300
 
-        self.details_now = [self.number_of_details_1_on_warehouse,
-                            self.number_of_details_2_on_warehouse,
-                            self.number_of_details_3_on_warehouse]
-        self.details_max = [self.max_number_of_details_1_on_warehouse,
-                            self.max_number_of_details_2_on_warehouse,
-                            self.max_number_of_details_3_on_warehouse]
+        # self.details_now = [self.number_of_details_1_on_warehouse,
+        #                     self.number_of_details_2_on_warehouse,
+        #                     self.number_of_details_3_on_warehouse]
+        # self.details_max = [self.max_number_of_details_1_on_warehouse,
+        #                     self.max_number_of_details_2_on_warehouse,
+        #                     self.max_number_of_details_3_on_warehouse]
 
         self.details = [
                         {"now": 1000, "max": 1200, "threshold": THRESHOLD},
@@ -521,11 +519,12 @@ class Truck:
     def loading(self):
         yield self.env.timeout(4000)
 
-    def _selecting_other_warehouse(self):
+
+    def _selecting_other_warehouse(self, details_type):
         for _ in (0, len(self.neighbors) + 1):
             random_warehouse_number = random.choice(self.neighbors)
             neighbor_warehouse = trucks[random_warehouse_number]
-            if neighbor_warehouse.number_of_details_1_on_warehouse >= 0.5 * neighbor_warehouse.max_number_of_details_1_on_warehouse:
+            if neighbor_warehouse.details[details_type]["now"] >= 0.5 * neighbor_warehouse.details[details_type]["max"]:
                 break
             else:
                 random_warehouse_number = None
@@ -544,11 +543,11 @@ class Truck:
             # Не меняем координаты производства, определенные по умолчанию.
             # Поэтому грузовик отправляется на производтсво
 
-    def to_other_warehouse(self):
+    def to_other_warehouse(self, details_type):
         """Перемещение грузовика от склада к производству/заводу"""
         global event_time, event
         if self.other_warehouse_now is None:
-            self._selecting_other_warehouse()  # Выбор склада с необходимым количеством деталей
+            self._selecting_other_warehouse(details_type=details_type)  # Выбор склада с необходимым количеством деталей
         self.x, self.y = moving_from_point1_to_point2(
             point1_x=self.x,
             point1_y=self.y,
@@ -568,11 +567,11 @@ class Truck:
                 print(
                     f"Грузовик ({self.warehouse_number}) уменьшает кол-во деталей на складе ({self.other_warehouse_now})")
                 trucks[
-                    self.other_warehouse_now].number_of_details_1_on_warehouse -= 0.3 * self.max_number_of_details_1_on_warehouse
+                    self.other_warehouse_now].details[details_type]["now"] -= 0.3 * self.details[details_type]["max"]
                 # trucks[
                 #     self.other_warehouse_now].number_of_details_on_warehouse -= 20000
                 print(
-                    f"Теперь на внешнем складе ({self.other_warehouse_now}) деталей = ({trucks[self.other_warehouse_now].number_of_details_1_on_warehouse})")
+                    f"Теперь на внешнем складе ({self.other_warehouse_now}) деталей = ({trucks[self.other_warehouse_now].details[details_type]['now']})")
 
         yield self.env.timeout(10)  # # Для того чтобы можно было вызвать как генератор
 
@@ -599,14 +598,14 @@ class Truck:
             if not self.from_production:
                 # self.number_of_details_1_on_warehouse += 0.3 * self.max_number_of_details_1_on_warehouse
                 # requiring_details_type["now"] += 0.3 * self.details[requiring_details_type]["max"]
-                details_type["now"] += 0.3 * details_type["max"]
+                self.details[details_type]["now"] += 0.3 * self.details[details_type]["max"]
             elif self.from_production:
                 # Возращается с производства
                 print(
                     f"Грузовик ({self.warehouse_number}) пополняет свой склад до максимума по возвращению с производства")
                 # self.number_of_details_1_on_warehouse = self.max_number_of_details_1_on_warehouse
-                for details_type in self.details:
-                    details_type["now"] = details_type["max"]
+                for type_of_details in self.details:
+                    type_of_details["now"] = type_of_details["max"]
                 # self.number_of_details_on_warehouse += 10000
                 self.from_production = False
 
@@ -679,86 +678,21 @@ class TruckOutside(Truck):
         """
         time_for_change_details = random.randint(2000, 4000)
 
-        details_type["now"] -= random.randint(10, 50)
+        self.details[details_type]["now"] -= random.randint(10, 50)
 
         yield self.env.timeout(time_for_change_details)
 
-    # def run(self):
-    #     while True:
-    #         if self.number_of_details_3_on_warehouse >= 0.3 * self.max_number_of_details_3_on_warehouse:
-    #             yield self.env.process(self._change_the_number_of_details())
-    #         else:
-    #             yield from ordering_new_details(truck_object=self)
-    #         if (self.number_of_details_3_on_warehouse / self.max_number_of_details_3_on_warehouse) * 100 <= THRESHOLD:
-    #             yield from ordering_new_details(truck_object=self)
-    #         yield self.env.timeout(50)
-
-    # def run(self):
-    #     while True:
-    #         if self.number_of_details_1_on_warehouse >= 0.3 * self.max_number_of_details_1_on_warehouse or \
-    #                 self.number_of_details_3_on_warehouse >= 0.3 * self.max_number_of_details_3_on_warehouse:
-    #             yield self.env.process(self._change_the_number_of_details())
-    #         else:
-    #             yield from ordering_new_details(truck_object=self)
-    #         if (self.number_of_details_1_on_warehouse / self.max_number_of_details_1_on_warehouse) * 100 <= THRESHOLD or \
-    #                 (self.number_of_details_3_on_warehouse / self.max_number_of_details_3_on_warehouse) * 100 <= THRESHOLD:
-    #             yield from ordering_new_details(truck_object=self)
-    #         yield self.env.timeout(50)
-
-    # def run(self):
-    #     while True:
-    #         if self.details[2]["now"] >= 0.3 * self.details[2]["max"]:
-    #             yield self.env.process(self._change_the_number_of_details())
-    #         else:
-    #             yield from ordering_new_details(truck_object=self)
-    #         if (self.details[2]["now"] / self.details[2]["max"]) * 100 <= self.details[2]["threshold"]:
-    #             yield from ordering_new_details(truck_object=self)
-    #         yield self.env.timeout(50)
 
     def run(self):
         while True:
-            # if self.details[2]["now"] >= 0.3 * self.details[2]["max"]:
-            #     yield self.env.process(self._change_the_number_of_details())
-            # else:
-            #     yield from ordering_new_details(truck_object=self)
-            # if (self.details[2]["now"] / self.details[2]["max"]) * 100 <= self.details[2]["threshold"]:
-            #     yield from ordering_new_details(truck_object=self)
-
-            # for details_type in self.details:
-            #     if details_type["now"] >= 0.3 * details_type["max"]:
-            #         yield self.env.process(self._change_the_number_of_details(details_type=details_type))
-            #     else:
-            #         yield from ordering_new_details(truck_object=self)
-            #     if (details_type["now"] / details_type["max"]) * 100 <= details_type["threshold"]:
-            #         yield from ordering_new_details(truck_object=self)
-
-            # details_type = self.details[2]
-
-            # if self.details[2]["now"] >= 0.3 * self.details[2]["max"]:
-            #     yield self.env.process(self._change_the_number_of_details(details_type=self.details[2]))
-            # else:
-            #     yield from ordering_new_details(truck_object=self)
-            # if (self.details[2]["now"] / self.details[2]["max"]) * 100 <= self.details[2]["threshold"]:
-            #     yield from ordering_new_details(truck_object=self)
-            # elif self.details[1]["now"] >= 0.3 * self.details[1]["max"]:
-            #     yield self.env.process(self._change_the_number_of_details(details_type=self.details[1]))
-            # else:
-            #     yield from ordering_new_details(truck_object=self)
-            # if (self.details[1]["now"] / self.details[1]["max"]) * 100 <= self.details[1]["threshold"]:
-            #     yield from ordering_new_details(truck_object=self)
-            # elif self.details[0]["now"] >= 0.3 * self.details[0]["max"]:
-            #     yield self.env.process(self._change_the_number_of_details(details_type=self.details[0]))
-            # else:
-            #     yield from ordering_new_details(truck_object=self)
-            # if (self.details[0]["now"] / self.details[0]["max"]) * 100 <= self.details[1]["threshold"]:
-            #     yield from ordering_new_details(truck_object=self)
-
-            for details_type in self.details:
-                if details_type["now"] >= 0.3 * details_type["max"]:
+            for type_of_details in self.details:
+                details_type = 0
+                if type_of_details["now"] >= 0.3 * type_of_details["max"]:
                     yield self.env.process(self._change_the_number_of_details(details_type=details_type))
                 else:
-                    while details_type["now"] < 0.3 * details_type["max"]:
+                    while type_of_details["now"] < 0.3 * type_of_details["max"]:
                         yield from ordering_new_details(truck_object=self, details_type=details_type)
+                details_type += 1
 
 
             yield self.env.timeout(50)
@@ -783,12 +717,11 @@ class TruckOutside(Truck):
 
         count = -10
         text = "Детали:"
-        for details_type in self.details:
-            print("details_type=", details_type["now"])
+        for type_of_details in self.details:
 
             monitoring_object.parameter_displaying(
                 text=text,
-                parameter=details_type["now"],
+                parameter=type_of_details["now"],
                 x=self.warehose_x + count, y=210, indent=-80
             )
             text = ""
@@ -846,6 +779,20 @@ class Monitoring:
                                   parameter=truck_local.details[0]["now"], x=710, y=590,
                                   indent=35)
 
+        count = -10
+        text = "Детали:"
+        for type_of_details in truck_local.details:
+
+            monitoring_object.parameter_displaying(
+                text=text,
+                parameter=type_of_details["now"],
+                x=truck_local.warehose_x + count, y=210, indent=-80
+            )
+            text = ""
+            count += 30
+            if count > 60:
+                count = 0
+
         # From Monitoring1(Для отладки)
         # Отображение события:
         self.parameter_displaying(text="Событие:", parameter=event, x=710, y=630, indent=-5)
@@ -897,7 +844,7 @@ def ordering_new_details(truck_object, details_type):
     """
     # Ждем грузовик с новыми запчастями и пополняем запас склада
     if truck_object.status == "in_warehouse":
-        yield env.process(truck_object.to_other_warehouse())
+        yield env.process(truck_object.to_other_warehouse(details_type=details_type))
     # Грузовик находится на производстве:
     if truck_object.status == "on_production":
         truck_object.other_warehouse_now = None
