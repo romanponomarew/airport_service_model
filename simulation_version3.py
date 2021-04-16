@@ -73,7 +73,9 @@ class Station:
         self.stoyanka_to_station = 0  # Находится ли какой-нибудь самолет в пути от стоянки к станции
         self.station_repair = ""  # Статус ремонта самолета на станции - "repair"/"ready"
         self.repairing = ""  # Ведется ли сейчас ремонт на 1 станции? (now/done)-ожидание грузчиком и самолетом ремонта
-        self.details_required = 0  # Сколько деталей требуются для починки самолета на станции
+        self.details_1_required = 0  # Сколько деталей 1го типа требуются для починки самолета на станции
+        self.details_2_required = 0  # Сколько деталей 2го типа требуются для починки самолета на станции
+        self.details_3_required = 0  # Сколько деталей 3го типа требуются для починки самолета на станции
         self.loader_to_station = 0  # Находится ли кто-то из грузчиков в пути от склада к станции
         self.loaders_count_on_station = 0
 
@@ -87,7 +89,9 @@ class Station:
         self.station_status = 1
         self.stoyanka_to_station = 0
         self.station_repair = "repair"
-        self.details_required = random.randint(1, 30)
+        self.details_1_required = random.randint(1, 30)
+        self.details_2_required = random.randint(10, 40)
+        self.details_3_required = random.randint(5, 20)
         event = f"Самолет{airplane_number} на ремонте(1)"
         event_time = round(env.now / 1000)
 
@@ -197,7 +201,9 @@ class Airplane:
             if self.status_now == ("on_station" + station_number) and station_object.station_repair == "ready":
                 self.status_now = "from_station" + station_number
                 station_object.station_status = 0
-                station_object.details_required = 0
+                station_object.details_1_required = 0
+                station_object.details_2_required = 0
+                station_object.details_3_required = 0
 
     def leaving_airport(self):
         """Самолеты покидают аэропорт со станций обслуживания"""
@@ -367,6 +373,30 @@ class Loader:
                     station_object.loader_to_station = 1
                     return station_object
 
+    # def departure_from_warehouse_to_station(self, station_object):
+    #     """
+    #     Если грузчиком получен запрос станции о ремонте, он проверяет:
+    #      1.находится ли кто-то из грузчиков уже в пути
+    #      2.есть ли на складе нужные запчасти
+    #     Забирает детали со склада и отправляется к нужной станции
+    #     """
+    #     global warehouse_loaders
+    #     station_number = station_object.number_of_station
+    #     if "to_station" not in self.status_now:
+    #         self.status_now = "to_station" + str(station_object.number_of_station)
+    #     if warehouse_loaders != 0:
+    #         warehouse_loaders -= 1
+    #     if station_object.loader_to_station and self.status_now == f"to_station{station_number}":
+    #         if truck_local.details[0]["now"] > station_object.details_1_required:
+    #             self.take_details_from_warehouse(details_required=station_object.details_1_required)
+    #             if self.loader_details != 0:
+    #                 if self.search_status == "search":
+    #                     yield self.env.timeout(
+    #                         self.search_time * station_object.details_1_required)  # Время поиска запчастей на складе
+    #                     self.search_status = "done"
+    #                 if self.search_status == "done":
+    #                     yield env.process(self.go_to_requesting_details_station(requesting_station=station_object))
+
     def departure_from_warehouse_to_station(self, station_object):
         """
         Если грузчиком получен запрос станции о ремонте, он проверяет:
@@ -380,27 +410,36 @@ class Loader:
             self.status_now = "to_station" + str(station_object.number_of_station)
         if warehouse_loaders != 0:
             warehouse_loaders -= 1
+
+
+
+
         if station_object.loader_to_station and self.status_now == f"to_station{station_number}":
-            if truck_local.details[0]["now"] > station_object.details_required:
-                self.take_details_from_warehouse(details_required=station_object.details_required)
+            if truck_local.details[0]["now"] > station_object.details_1_required and\
+                    truck_local.details[1]["now"] > station_object.details_2_required and\
+                    truck_local.details[2]["now"] > station_object.details_3_required:
+                self.take_details_from_warehouse(
+                    type_1_details_required=station_object.details_1_required,
+                    type_2_details_required=station_object.details_2_required,
+                    type_3_details_required=station_object.details_3_required)
                 if self.loader_details != 0:
                     if self.search_status == "search":
                         yield self.env.timeout(
-                            self.search_time * station_object.details_required)  # Время поиска запчастей на складе
+                            self.search_time * (station_object.details_1_required + station_object.details_2_required + station_object.details_3_required))  # Время поиска запчастей на складе
                         self.search_status = "done"
                     if self.search_status == "done":
                         yield env.process(self.go_to_requesting_details_station(requesting_station=station_object))
 
-    def take_details_from_warehouse(self, details_required):
+    def take_details_from_warehouse(self, type_1_details_required, type_2_details_required, type_3_details_required):
         """
         Забрать необходимое кол-во деталей(для станции тех.обслуживания №1 или №2) со склада:
         Уменьшить кол-во деталей на складе
         """
-        # global WAREHOSE_STATION_SIZE2
         if self.warehose_status == "empty":
-            # WAREHOSE_STATION_SIZE2 -= details_required
-            truck_local.details[0]["now"] -= details_required
-            self.loader_details = details_required
+            truck_local.details[0]["now"] -= type_1_details_required
+            truck_local.details[1]["now"] -= type_2_details_required
+            truck_local.details[2]["now"] -= type_3_details_required
+            self.loader_details = type_1_details_required  # TODO: Разобраться, что делает эта переменная
             self.warehose_status = "full"
 
     def return_to_warehouse(self):
@@ -444,7 +483,7 @@ class Loader:
             #         yield from ordering_new_details(truck_object=truck_local, details_type=details_type)
 
             for station_object in stations_objects:
-                if (truck_local.details[0]["now"] < station_object.details_required) \
+                if (truck_local.details[0]["now"] < station_object.details_1_required) \
                         or (
                         truck_local.details[0]["now"] < truck_local.details[0]["max"] * (
                         truck_local.details[0]["threshold"] / 100)):
@@ -759,8 +798,14 @@ class Monitoring:
             text_y = station.y - 65
             # self.parameter_displaying(text=airplanes_counts_text, parameter=station.station_status, x=text_x,
             #                           y=text_y - 15)
-            # ################### Отображение кол-ва деталей на станции тех.обслуживания: ###################
-            self.parameter_displaying(text=details_required_text, parameter=station.details_required, x=text_x,
+            # ################### Отображение кол-ва деталей 1го типа на станции тех.обслуживания: ###################
+            self.parameter_displaying(text=details_required_text, parameter=station.details_1_required, x=text_x,
+                                      y=text_y - 15)
+            # ################### Отображение кол-ва деталей 2го типа на станции тех.обслуживания: ###################
+            self.parameter_displaying(text="", parameter=station.details_2_required, x=text_x + 20,
+                                      y=text_y - 15)
+            # ################### Отображение кол-ва деталей 3го типа на станции тех.обслуживания: ###################
+            self.parameter_displaying(text="", parameter=station.details_3_required, x=text_x + 40,
                                       y=text_y - 15)
             # ################### Отображение кол-ва команд механиков на станции тех.обслуживания: ###################
             self.parameter_displaying(text=loaders_counts_text, parameter=station.loaders_count_on_station, x=text_x,
