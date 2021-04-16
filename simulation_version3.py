@@ -411,12 +411,9 @@ class Loader:
         if warehouse_loaders != 0:
             warehouse_loaders -= 1
 
-
-
-
         if station_object.loader_to_station and self.status_now == f"to_station{station_number}":
-            if truck_local.details[0]["now"] > station_object.details_1_required and\
-                    truck_local.details[1]["now"] > station_object.details_2_required and\
+            if truck_local.details[0]["now"] > station_object.details_1_required and \
+                    truck_local.details[1]["now"] > station_object.details_2_required and \
                     truck_local.details[2]["now"] > station_object.details_3_required:
                 self.take_details_from_warehouse(
                     type_1_details_required=station_object.details_1_required,
@@ -425,7 +422,8 @@ class Loader:
                 if self.loader_details != 0:
                     if self.search_status == "search":
                         yield self.env.timeout(
-                            self.search_time * (station_object.details_1_required + station_object.details_2_required + station_object.details_3_required))  # Время поиска запчастей на складе
+                            self.search_time * (
+                                        station_object.details_1_required + station_object.details_2_required + station_object.details_3_required))  # Время поиска запчастей на складе
                         self.search_status = "done"
                     if self.search_status == "done":
                         yield env.process(self.go_to_requesting_details_station(requesting_station=station_object))
@@ -483,11 +481,18 @@ class Loader:
             #         yield from ordering_new_details(truck_object=truck_local, details_type=details_type)
 
             for station_object in stations_objects:
-                if (truck_local.details[0]["now"] < station_object.details_1_required) \
-                        or (
-                        truck_local.details[0]["now"] < truck_local.details[0]["max"] * (
-                        truck_local.details[0]["threshold"] / 100)):
+                if (truck_local.details[0]["now"] < station_object.details_1_required) or \
+                        (truck_local.details[0]["now"] < truck_local.details[0]["max"] * (
+                                truck_local.details[0]["threshold"] / 100)):
                     yield from ordering_new_details(truck_object=truck_local, details_type=0)
+                elif (truck_local.details[1]["now"] < station_object.details_2_required) or \
+                        (truck_local.details[1]["now"] < truck_local.details[1]["max"] * (
+                                truck_local.details[1]["threshold"] / 100)):
+                    yield from ordering_new_details(truck_object=truck_local, details_type=1)
+                elif (truck_local.details[2]["now"] < station_object.details_3_required) or \
+                        (truck_local.details[2]["now"] < truck_local.details[2]["max"] * (
+                                truck_local.details[2]["threshold"] / 100)):
+                    yield from ordering_new_details(truck_object=truck_local, details_type=2)
 
             # Отправление грузчика при завершении ремонта со станции обратно на склад:
             yield from self.return_to_warehouse()
@@ -507,7 +512,6 @@ class Truck:
     """
 
     # # TODO: 1)Добавить три вида деталей на складах, их изменение и пополнение
-    #         2)Добавить 3 вида деталей в систему с грузчиками локального склада
     def __init__(self, env):
         self.warehose_y = None
         self.production_x = 530  # Координаты внешнего производства
@@ -720,8 +724,8 @@ class TruckOutside(Truck):
 
     def run(self):
         while True:
+            details_type = 0
             for type_of_details in self.details:
-                details_type = 0
                 if type_of_details["now"] >= 0.3 * type_of_details["max"]:
                     yield self.env.process(self._change_the_number_of_details(details_type=details_type))
                 else:
@@ -756,7 +760,7 @@ class TruckOutside(Truck):
             monitoring_object.parameter_displaying(
                 text=text,
                 parameter=type_of_details["now"],
-                x=self.warehose_x + count, y=210, indent=-80
+                x=self.warehose_x + 10, y=210 + count + 10, indent=-80
             )
             text = ""
             count += 30
@@ -814,23 +818,18 @@ class Monitoring:
         # ################### Отображение кол-ва команд грузчиков на локальном складе: ###################
         self.parameter_displaying(text=loaders_counts_text, parameter=warehouse_loaders, x=710, y=565, indent=-20)
         # ################### Отображение кол-ва деталей на локальном складе: ###################
-        # self.parameter_displaying(text="Кол-во деталей на складе:",
-        #                           parameter=truck_local.details[0]["now"], x=710, y=500,
-        #                           indent=35)
-
-        count = -10
+        count = 0
         text = "Детали:"
         for type_of_details in truck_local.details:
-
             monitoring_object.parameter_displaying(
                 text=text,
                 parameter=type_of_details["now"],
-                x=720 + count, y=590, indent=-75
+                x=710 + count, y=590, indent=-75
             )
             text = ""
-            count += 30
-            if count > 60:
-                count = 0
+            count += 60
+            # if count > 60:
+            #     count = 0
 
         # From Monitoring1(Для отладки)
         # Отображение события:
