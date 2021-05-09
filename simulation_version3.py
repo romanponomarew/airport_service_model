@@ -23,7 +23,7 @@ TOTAL_NUMBER_OF_AIRPLANES = 60
 # Define constants for the screen width and height
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 780
-SIMULATION_SPEED = 0.0002  # 0.005 - NORMAL_speed, 0.0001 - FAST_speed, 0.0000000001 - MAX_speed
+SIMULATION_SPEED = 0.0003  # 0.005 - NORMAL_speed, 0.0001 - FAST_speed, 0.0000000001 - MAX_speed
 # Airplane_Settings####################
 AIRPLANE_SPEED_X = 3
 AIRPLANE_SPEED_Y = 10
@@ -373,29 +373,6 @@ class Loader:
                     station_object.loader_to_station = 1
                     return station_object
 
-    # def departure_from_warehouse_to_station(self, station_object):
-    #     """
-    #     Если грузчиком получен запрос станции о ремонте, он проверяет:
-    #      1.находится ли кто-то из грузчиков уже в пути
-    #      2.есть ли на складе нужные запчасти
-    #     Забирает детали со склада и отправляется к нужной станции
-    #     """
-    #     global warehouse_loaders
-    #     station_number = station_object.number_of_station
-    #     if "to_station" not in self.status_now:
-    #         self.status_now = "to_station" + str(station_object.number_of_station)
-    #     if warehouse_loaders != 0:
-    #         warehouse_loaders -= 1
-    #     if station_object.loader_to_station and self.status_now == f"to_station{station_number}":
-    #         if truck_local.details[0]["now"] > station_object.details_1_required:
-    #             self.take_details_from_warehouse(details_required=station_object.details_1_required)
-    #             if self.loader_details != 0:
-    #                 if self.search_status == "search":
-    #                     yield self.env.timeout(
-    #                         self.search_time * station_object.details_1_required)  # Время поиска запчастей на складе
-    #                     self.search_status = "done"
-    #                 if self.search_status == "done":
-    #                     yield env.process(self.go_to_requesting_details_station(requesting_station=station_object))
 
     def departure_from_warehouse_to_station(self, station_object):
         """
@@ -472,13 +449,6 @@ class Loader:
             if station_object:
                 yield from self.departure_from_warehouse_to_station(station_object)
 
-            # Говорим грузовику отпрваится на склад за новыми запчастями:
-            # for station_object in stations_objects:
-            #     if (truck_local.number_of_details_1_on_warehouse < station_object.details_required) \
-            #             or (
-            #             truck_local.number_of_details_1_on_warehouse < truck_local.max_number_of_details_1_on_warehouse * (
-            #             THRESHOLD / 100)):
-            #         yield from ordering_new_details(truck_object=truck_local, details_type=details_type)
 
             for station_object in stations_objects:
                 if (truck_local.details[0]["now"] < station_object.details_1_required) or \
@@ -511,7 +481,6 @@ class Truck:
          2.Грузовик внешнего склада
     """
 
-    # # TODO: 1)Добавить три вида деталей на складах, их изменение и пополнение
     def __init__(self, env):
         self.warehose_y = None
         self.production_x = 530  # Координаты внешнего производства

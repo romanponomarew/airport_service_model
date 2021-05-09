@@ -15,7 +15,7 @@ import random
 import json
 
 AIRPLANE_ARRIVING_TIME = [3000, 7000]  # Прибытие самолета каждые [min, max] секунд
-TOTAL_NUMBER_OF_AIRPLANES = 20
+TOTAL_NUMBER_OF_AIRPLANES = 60
 # Define constants for the screen width and height
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 700
@@ -31,8 +31,8 @@ LOADER_SPEED_X = 3
 LOADER_SPEED_Y = 2
 NUMBER_OF_LOADERS = 3
 # Truck_Settings######################
-TRUCK_SPEED_X = 2
-TRUCK_SPEED_Y = 3
+TRUCK_SPEED_X = 0.7
+TRUCK_SPEED_Y = 0.7
 
 """Вспомогательные переменные для отображения количества агентов, координат"""
 ############################################################
@@ -69,8 +69,15 @@ class Station:
         self.station_repair = ""  # Статус ремонта самолета на станции - "repair"/"ready"
         self.repairing = ""  # Ведется ли сейчас ремонт на 1 станции? (now/done)-ожидание грузчиком и самолетом ремонта
         self.details_required = 0  # Сколько деталей требуются для починки самолета на станции
+
+        self.details_1_required = 0  # Сколько деталей 1го типа требуются для починки самолета на станции
+        self.details_2_required = 0  # Сколько деталей 2го типа требуются для починки самолета на станции
+        self.details_3_required = 0  # Сколько деталей 3го типа требуются для починки самолета на станции
+
         self.loader_to_station = 0  # Находится ли кто-то из грузчиков в пути от склада к станции
         self.loaders_count_on_station = 0
+
+
 
     def change_station_status_to_busy(self, airplane_number):
         """
@@ -78,11 +85,12 @@ class Station:
         изменить ее статус на занятый ремонтом
         """
         global event, event_time
-
         self.station_status = 1
         self.stoyanka_to_station = 0
         self.station_repair = "repair"
-        self.details_required = random.randint(1, 30)
+        self.details_1_required = random.randint(1, 30)
+        self.details_2_required = random.randint(10, 40)
+        self.details_3_required = random.randint(5, 20)
         event = f"Самолет{airplane_number} на ремонте(1)"
         event_time = round(env.now / 1000)
 
@@ -182,6 +190,7 @@ class Airplane:
                     stoyanka_counts -= 1
                     return station_object
 
+
     def counting_required_details(self):
         """
         При нахождении самолета на станции обслуживания происходит подсчет необходимых для ремонта деталей
@@ -191,7 +200,9 @@ class Airplane:
             if self.status_now == ("on_station" + station_number) and station_object.station_repair == "ready":
                 self.status_now = "from_station" + station_number
                 station_object.station_status = 0
-                station_object.details_required = 0
+                station_object.details_1_required = 0
+                station_object.details_2_required = 0
+                station_object.details_3_required = 0
 
     def leaving_airport(self):
         """Самолеты покидают аэропорт со станций обслуживания"""
@@ -361,7 +372,9 @@ class Loader:
                     station_object.loader_to_station = 1
                     return station_object
 
-    def departure_from_warehouse_to_station(self, WAREHOSE_STATION_SIZE2, station_object):
+
+
+    def departure_from_warehouse_to_station(self, station_object):
         """
         Если грузчиком получен запрос станции о ремонте, он проверяет:
          1.находится ли кто-то из грузчиков уже в пути
@@ -374,26 +387,36 @@ class Loader:
             self.status_now = "to_station" + str(station_object.number_of_station)
         if warehouse_loaders != 0:
             warehouse_loaders -= 1
+
         if station_object.loader_to_station and self.status_now == f"to_station{station_number}":
-            if WAREHOSE_STATION_SIZE2 > station_object.details_required:
-                self.take_details_from_warehouse(details_required=station_object.details_required)
+            if truck.details[0]["now"] > station_object.details_1_required and \
+                    truck.details[1]["now"] > station_object.details_2_required and \
+                    truck.details[2]["now"] > station_object.details_3_required:
+                self.take_details_from_warehouse(
+                    type_1_details_required=station_object.details_1_required,
+                    type_2_details_required=station_object.details_2_required,
+                    type_3_details_required=station_object.details_3_required)
                 if self.loader_details != 0:
                     if self.search_status == "search":
                         yield self.env.timeout(
-                            self.search_time * station_object.details_required)  # Время поиска запчастей на складе
+                            self.search_time * (
+                                        station_object.details_1_required + station_object.details_2_required + station_object.details_3_required))  # Время поиска запчастей на складе
                         self.search_status = "done"
                     if self.search_status == "done":
                         yield env.process(self.go_to_requesting_details_station(requesting_station=station_object))
 
-    def take_details_from_warehouse(self, details_required):
+
+
+    def take_details_from_warehouse(self, type_1_details_required, type_2_details_required, type_3_details_required):
         """
         Забрать необходимое кол-во деталей(для станции тех.обслуживания №1 или №2) со склада:
         Уменьшить кол-во деталей на складе
         """
-        global WAREHOSE_STATION_SIZE2
         if self.warehose_status == "empty":
-            WAREHOSE_STATION_SIZE2 -= details_required
-            self.loader_details = details_required
+            truck.details[0]["now"] -= type_1_details_required
+            truck.details[1]["now"] -= type_2_details_required
+            truck.details[2]["now"] -= type_3_details_required
+            self.loader_details = type_1_details_required  # TODO: Разобраться, что делает эта переменная
             self.warehose_status = "full"
 
     @staticmethod
@@ -447,7 +470,7 @@ class Loader:
 
             # Грузчик отпраляется на запросившую ремонт станцию обслуживания
             if station_object:
-                yield from self.departure_from_warehouse_to_station(WAREHOSE_STATION_SIZE2, station_object)
+                yield from self.departure_from_warehouse_to_station(station_object)
 
             # Говорим грузовику отпрваится на склад за новыми запчастями:
             yield from self.ordering_new_details()
@@ -486,6 +509,12 @@ class Truck:
         self.status = "in_warehouse"  # "on_production"
         # self.status = "on_production"
         self.loading_status = ""  # Загружается ли сейчас грузовик? ("now"/"done")
+
+        self.details = [
+            {"now": 1000, "max": 1200, "threshold": THRESHOLD},
+            {"now": 750, "max": 1000, "threshold": THRESHOLD},
+            {"now": 300, "max": 500, "threshold": THRESHOLD}
+        ]
 
     def loading(self):
         yield self.env.timeout(4000)
@@ -567,30 +596,48 @@ class Monitoring:
         self.parameter_displaying(text=airplanes_counts_text, parameter=stoyanka_counts, x=10, y=230)
 
         for station in stations_objects:
-            # ################### Отображение кол-ва самолетов на станции тех.обслуживания: ###################
+            # # ################### Отображение кол-ва самолетов на станции тех.обслуживания: ###################
             text_x = station.x - 45
             text_y = station.y - 65
-            self.parameter_displaying(text=airplanes_counts_text, parameter=station.station_status, x=text_x,
+            # self.parameter_displaying(text=airplanes_counts_text, parameter=station.station_status, x=text_x,
+            #                           y=text_y - 15)
+
+            # ################### Отображение кол-ва деталей 1го типа на станции тех.обслуживания: ###################
+            self.parameter_displaying(text=details_required_text, parameter=station.details_1_required, x=text_x,
                                       y=text_y - 15)
-            # ################### Отображение кол-ва деталей на станции тех.обслуживания: ###################
-            self.parameter_displaying(text=details_required_text, parameter=station.details_required, x=text_x,
-                                      y=text_y - 30)
+            # ################### Отображение кол-ва деталей 2го типа на станции тех.обслуживания: ###################
+            self.parameter_displaying(text="", parameter=station.details_2_required, x=text_x + 20,
+                                      y=text_y - 15)
+            # ################### Отображение кол-ва деталей 3го типа на станции тех.обслуживания: ###################
+            self.parameter_displaying(text="", parameter=station.details_3_required, x=text_x + 40,
+                                      y=text_y - 15)
             # ################### Отображение кол-ва команд механиков на станции тех.обслуживания: ###################
             self.parameter_displaying(text=loaders_counts_text, parameter=station.loaders_count_on_station, x=text_x,
                                       y=text_y)
 
         # ################### Отображение кол-ва команд грузчиков на складе: ###################
         self.parameter_displaying(text=loaders_counts_text, parameter=warehouse_loaders, x=778, y=300)
-        # ################### Отображение кол-ва деталей на складе(2): ###################
-        self.parameter_displaying(text="Кол-во деталей на складе:", parameter=WAREHOSE_STATION_SIZE2, x=778, y=325,
-                                  indent=50)
+
+        # ################### Отображение кол-ва деталей на локальном складе: ###################
+        count = 0
+        text = "Детали:"
+        for type_of_details in truck.details:
+            monitoring_object.parameter_displaying(
+                text=text,
+                parameter=type_of_details["now"],
+                x=778 + count, y=325, indent=-75
+            )
+            text = ""
+            count += 60
+
+
         # From Monitoring1(Для отладки)
         # Отображение события:
-        self.parameter_displaying(text="Событие:", parameter=event, x=550, y=440, indent=-50)
+        self.parameter_displaying(text="Событие:", parameter=event, x=778, y=460, indent=-50)
         # Время события:
-        self.parameter_displaying(text="Время:", parameter=event_time, x=550, y=470, indent=-70)
+        self.parameter_displaying(text="Время:", parameter=event_time, x=778, y=490, indent=-70)
         # Время в симуляции:
-        self.parameter_displaying(text="Время симуляции:", parameter=round(env.now / 1000), x=550, y=620)
+        self.parameter_displaying(text="Время симуляции:", parameter=round(env.now / 1000), x=778, y=530)
 
 
 ###########################################################
@@ -617,7 +664,9 @@ event_time = 0  # Время глобального события
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 renderer = FrameRenderer(screen)
 env = PyGameEnvironment(renderer, factor=SIMULATION_SPEED, strict=False)  # factor - Для скорости воспроизведения модели
-renderer.add(Monitoring(stoyanka_counts))
+
+monitoring_object = Monitoring(stoyanka_counts)
+renderer.add(monitoring_object)
 
 station1 = Station(number_of_station=1)
 station2 = Station(number_of_station=2)
